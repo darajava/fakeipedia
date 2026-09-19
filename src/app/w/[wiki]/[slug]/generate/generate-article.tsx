@@ -4,9 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { articleLink, articlePath, prepareWikiLinks } from "@/lib/wiki";
 import { WikiImage } from "@/components/wiki-image";
+import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
+import type { ArticleImageMessage } from "@/lib/article-images";
 
 type GenerateArticleProps = {
+  wiki: string;
   slug: string;
   title: string;
   sourceSlug: string;
@@ -14,27 +18,13 @@ type GenerateArticleProps = {
 };
 
 type StreamMessage =
+  | ArticleImageMessage
   | {
       type: "delta";
       delta: string;
     }
   | {
       type: "text-done";
-    }
-  | {
-      type: "images-start";
-      count: number;
-    }
-  | {
-      type: "image-start";
-      filename: string;
-      index: number;
-      count: number;
-    }
-  | {
-      type: "image-done";
-      filename: string;
-      url: string;
     }
   | {
       type: "done";
@@ -46,6 +36,7 @@ type StreamMessage =
     };
 
 export function GenerateArticle({
+  wiki,
   slug,
   title,
   sourceSlug,
@@ -55,10 +46,11 @@ export function GenerateArticle({
   const started = useRef(false);
 
   const [markdown, setMarkdown] = useState("");
-  const [status, setStatus] = useState("");
+  const [, setStatus] = useState("");
   const [error, setError] = useState<string>();
 
   const [readyImages, setReadyImages] = useState<Record<string, string>>({});
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   /*
    * Construct this once instead of querying the database
@@ -81,10 +73,10 @@ export function GenerateArticle({
   const markdownComponents = useMemo<Components>(
     () => ({
       a({ href, children, className, ...props }) {
-        const linkedSlug = wikiSlugFromHref(href);
+        const link = articleLink(href, wiki);
 
         const isMissing =
-          linkedSlug !== undefined && !existingSlugs.has(linkedSlug);
+          link?.wiki === wiki && !existingSlugs.has(link.slug);
 
         const linkClassName = [
           className,
@@ -94,18 +86,18 @@ export function GenerateArticle({
           .join(" ");
 
         return (
-          <a href={href} className={linkClassName || undefined} {...props}>
+          <a href={link?.href ?? href} className={linkClassName || undefined} {...props}>
             {children}
           </a>
         );
       },
 
-      img({ src, alt, title }) {
+      img({ src, alt, title, className }) {
         const filename = imageFilename(src as string);
 
         const completedUrl = filename ? readyImages[filename] : undefined;
 
-        if (filename && !completedUrl) {
+        if (filename && !completedUrl && !failedImages[filename]) {
           return (
             <span className="wiki-image-frame wiki-image-generating">
               <span className="wiki-image-loading-area">
@@ -128,11 +120,13 @@ export function GenerateArticle({
             src={(completedUrl as string) ?? src}
             alt={alt ?? ""}
             caption={title ?? alt ?? ""}
+            priority={className?.includes("wiki-subject-image")}
+            unavailable={Boolean(filename && failedImages[filename])}
           />
         );
       },
     }),
-    [existingSlugs, readyImages],
+    [existingSlugs, readyImages, failedImages, wiki],
   );
 
   useEffect(() => {
@@ -152,6 +146,7 @@ export function GenerateArticle({
           },
 
           body: JSON.stringify({
+            wiki,
             slug,
             title,
             sourceSlug,
@@ -159,7 +154,7 @@ export function GenerateArticle({
         });
 
         if (response.status === 409) {
-          router.replace(`/wiki/${slug}`);
+          router.replace(articlePath(wiki, slug));
           router.refresh();
           return;
         }
@@ -229,10 +224,17 @@ export function GenerateArticle({
               }));
             }
 
+            if (message.type === "image-error") {
+              setFailedImages((current) => ({
+                ...current,
+                [message.filename]: true,
+              }));
+            }
+
             if (message.type === "done") {
               setStatus("Article saved. Opening it…");
 
-              router.replace(`/wiki/${message.slug}`);
+              router.replace(articlePath(wiki, message.slug));
 
               router.refresh();
               return;
@@ -257,7 +259,7 @@ export function GenerateArticle({
     }
 
     void generate();
-  }, [router, slug, title, sourceSlug]);
+  }, [router, wiki, slug, title, sourceSlug]);
 
   return (
     <section className="wiki-generator" aria-busy={!error}>
@@ -272,70 +274,27 @@ export function GenerateArticle({
       ) : (
         <article className="wiki-article wiki-generation-preview">
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, [remarkSubjectInfobox, { title, wiki, slug }]]}
             components={markdownComponents}
           >
-            {prepareStreamingMarkdown(markdown)}
+            {prepareWikiLinks(markdown, wiki)}
           </ReactMarkdown>
 
           {!markdown && (
             <div
               className="wiki-loading"
               role="status"
-              aria-label="Generating article"
+              aria-label="Thinking"
             >
               <span className="wiki-loading-spinner" aria-hidden="true" />
 
-              <span>Generating article…</span>
+              <span className="wiki-thinking-label">Thinking…</span>
             </div>
           )}
         </article>
       )}
     </section>
   );
-}
-
-function slugify(value: string): string {
-  return value
-    .normalize("NFKD")
-    .toLowerCase()
-    .trim()
-    .replace(/[_\s]+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function prepareStreamingMarkdown(markdown: string): string {
-  return markdown.replace(
-    /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
-    (_match, target: string, label?: string) => {
-      const title = target.trim();
-      const displayLabel = label?.trim() || title;
-
-      return `[${displayLabel}](/wiki/${slugify(
-        title,
-      )}?title=${encodeURIComponent(title)})`;
-    },
-  );
-}
-
-function wikiSlugFromHref(href?: string): string | undefined {
-  if (!href?.startsWith("/wiki/")) {
-    return undefined;
-  }
-
-  const path = href.slice("/wiki/".length).split(/[?#]/, 1)[0];
-
-  if (!path) {
-    return undefined;
-  }
-
-  try {
-    return decodeURIComponent(path).toLowerCase().replace(/\/$/, "");
-  } catch {
-    return path.toLowerCase().replace(/\/$/, "");
-  }
 }
 
 function imageFilename(source?: string): string | undefined {

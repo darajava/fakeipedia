@@ -180,6 +180,30 @@ input {
   color: var(--wiki-link);
 }
 
+.wiki-delete-button {
+  border-top: 0;
+  border-bottom: 0;
+  background: transparent;
+  color: #b32424;
+  cursor: pointer;
+}
+
+.wiki-delete-button:hover,
+.wiki-delete-button:focus-visible {
+  text-decoration: underline;
+}
+
+.wiki-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.wiki-delete-error {
+  max-width: 280px;
+  color: #b32424;
+  white-space: normal;
+}
+
 .wiki-article {
   min-height: 70vh;
   padding: 22px 42px 48px;
@@ -303,23 +327,46 @@ input {
   text-align: left;
 }
 
-/* The first Markdown table is treated as the article infobox. */
-.wiki-article > table:first-of-type {
+.wiki-infobox {
   float: right;
+  clear: right;
   width: 320px;
   max-width: 42%;
   margin: 0 0 18px 24px;
+  padding: 4px;
+  border: 1px solid var(--wiki-border);
   background: var(--wiki-background);
+  box-sizing: border-box;
 }
 
-.wiki-article > table:first-of-type tr:first-child td {
+.wiki-infobox .wiki-infobox-title {
+  margin: 0 0 4px;
+  padding: 7px 8px;
   background: var(--wiki-infobox-heading);
-  font-size: 16px;
+  font-size: 18px;
   text-align: center;
 }
 
-.wiki-article > table:first-of-type td:first-child {
-  width: 42%;
+.wiki-infobox .wiki-image-frame {
+  float: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wiki-infobox .wiki-infobox-links {
+  margin: 6px 4px 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--wiki-border);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.wiki-infobox > p:has(> .wiki-image-frame) {
+  margin: 0;
 }
 
 .wiki-article code {
@@ -431,7 +478,7 @@ input {
     font-size: 27px;
   }
 
-  .wiki-article > table:first-of-type {
+  .wiki-infobox {
     float: none;
     width: 100%;
     max-width: none;
@@ -525,16 +572,57 @@ input {
   align-items: center;
   gap: 0.75rem;
   padding: 2rem 0;
-  color: #54595d;
+  color: var(--wiki-muted);
 }
 
 .wiki-loading-spinner {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 3px solid #c8ccd1;
-  border-top-color: #36c;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.wiki-loading-spinner::before,
+.wiki-loading-spinner::after {
+  position: absolute;
+  inset: 0;
   border-radius: 50%;
-  animation: wiki-spinner-rotation 0.75s linear infinite;
+  content: "";
+}
+
+.wiki-loading-spinner::before {
+  border: 2px solid var(--wiki-border-light);
+  opacity: 0.4;
+}
+
+.wiki-loading-spinner::after {
+  background: conic-gradient(from 0deg, transparent 15%, var(--wiki-link) 90%, transparent 100%);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  animation: wiki-spinner-rotation 1.1s linear infinite;
+}
+
+.wiki-thinking-label {
+  font-weight: 500;
+}
+
+@supports (background-clip: text) {
+  .wiki-thinking-label {
+    background: linear-gradient(110deg, var(--wiki-muted) 35%, #7891b0 48%, var(--wiki-text) 55%, var(--wiki-muted) 65%);
+    background-size: 250% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: wiki-thinking-shimmer 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes wiki-thinking-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
 }
 
 @keyframes wiki-spinner-rotation {
@@ -662,6 +750,17 @@ input {
   animation: none;
 }
 
+.wiki-image-unavailable {
+  display: flex;
+  min-height: 210px;
+  padding: 1rem;
+  align-items: center;
+  justify-content: center;
+  background: var(--wiki-tab-background);
+  color: var(--wiki-muted);
+  text-align: center;
+}
+
 .wiki-image-loading-area {
   display: flex;
   min-height: 210px;
@@ -673,6 +772,34 @@ input {
   background-size: 200% 100%;
   animation: wiki-image-loading 1.5s linear infinite;
   color: #54595d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiki-thinking-label,
+  .wiki-loading-spinner::after,
+  .wiki-image-generating,
+  .wiki-image-loading-area {
+    animation: none;
+  }
+
+  .wiki-thinking-label {
+    background: none;
+    color: var(--wiki-muted);
+  }
+}
+
+@media (forced-colors: active) {
+  .wiki-thinking-label {
+    background: none;
+    color: CanvasText;
+  }
+
+  .wiki-loading-spinner::after {
+    border: 2px solid transparent;
+    border-top-color: CanvasText;
+    background: none;
+    mask: none;
+  }
 }
 
 @media (max-width: 700px) {

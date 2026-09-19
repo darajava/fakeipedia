@@ -6,10 +6,13 @@ type WikiImageProps = {
   src: string;
   alt: string;
   caption?: string;
+  priority?: boolean;
+  unavailable?: boolean;
 };
 
-export function WikiImage({ src, alt, caption }: WikiImageProps) {
+export function WikiImage({ src, alt, caption, priority = false, unavailable = false }: WikiImageProps) {
   const [open, setOpen] = useState(false);
+  const [failedSource, setFailedSource] = useState<string>();
   const captionId = useId();
 
   useEffect(() => {
@@ -36,6 +39,15 @@ export function WikiImage({ src, alt, caption }: WikiImageProps) {
     };
   }, [open]);
 
+  if (unavailable || failedSource === src) {
+    return (
+      <span className="wiki-image-frame">
+        <span className="wiki-image-unavailable" role="status">Image unavailable</span>
+        <span className="wiki-image-caption">{caption || alt}</span>
+      </span>
+    );
+  }
+
   return (
     <span className="wiki-image-frame">
       <button
@@ -45,7 +57,15 @@ export function WikiImage({ src, alt, caption }: WikiImageProps) {
         aria-label={`Open image: ${caption || alt}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} loading="lazy" />
+        <img
+          src={src}
+          alt={alt}
+          loading={priority ? "eager" : "lazy"}
+          onError={() => {
+            setFailedSource(src);
+            setOpen(false);
+          }}
+        />
 
         <span className="wiki-image-caption">
           <span>{caption || alt}</span>
