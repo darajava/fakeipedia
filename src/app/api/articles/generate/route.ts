@@ -177,9 +177,11 @@ export async function POST(request: Request) {
     .where(eq(articles.wiki, wiki))
     .orderBy(asc(articles.title), asc(articles.slug));
 
-  const { catalogue: articleCatalogue, referringText, mainText } = buildArticleContext(
-    existingArticles, wiki, slug, sourceArticle,
-  );
+  const {
+    catalogue: articleCatalogue,
+    referringText,
+    mainText,
+  } = buildArticleContext(existingArticles, wiki, slug, sourceArticle);
 
   const overviewBrief = findWorldOverviewBrief(existingArticles, wiki, slug);
   const isWorldOverview = Boolean(overviewBrief);
@@ -210,8 +212,10 @@ Do not use HTML, SVG, scripts or YAML frontmatter.
 For mathematical notation, use TeX inside $...$ for inline expressions or
 $$ on separate lines for display equations. Keep TeX commands and subscripts
 unescaped within these delimiters; do not wrap math in backticks.
+Use math only when it makes sense to do so. Always prefer english notation.
 End the article with a "See also" section
 Don't ever metion that this is fictional - this is written as if it is a real encyclopedia article.
+Don't make ASCII graphics or diagrams. Use only text and images.
 Limit "See Also" from 3 to 6 links
 
 ${
@@ -263,6 +267,10 @@ Where appropriate, define the article's name in wikipedia style:
 i.e. Atlantis (Ancient Greek: Ἀτλαντὶς νῆσος, romanized: Atlantìs nêsos, lit. 'island of Atlas')
 
 or sometimes use IPA pronunciation notation
+
+Don't use IPA in every article, only when it is hard to pronounce.
+
+Try to put something in brackets though.
 
 EXISTING FAKEIPEDIA ARTICLE CATALOGUE:
 

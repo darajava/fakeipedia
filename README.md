@@ -18,6 +18,18 @@ Use lowercase, hyphenated wiki directory names. The first directory determines t
 
 Articles use `/w/WIKI/ARTICLE`, for example `/w/zorg/helion-system`. `/` lists imported wikis, and `/w/zorg` lists Zorg's articles. Existing `/wiki/ARTICLE` URLs redirect to Zorg.
 
+Homepage cards read their display title and subtitle directly from the frontmatter of each wiki's `stub-*.md` file. Keep one stub at the top level of each wiki directory. Editing these fields updates the homepage without reimporting or regenerating articles:
+
+```markdown
+---
+title: ASI
+subtitle: In 2048, ASI rules Earth and humanity struggles to survive.
+slug: stub-asi
+---
+```
+
+Each card opens the stub's last linked article (the same target used for initial page generation). The title can differ from the folder name and the target article's title. Wikis without a local stub retain their folder-derived title and article-list link.
+
 ## Article graph
 
 Open **Article graph** from an article's navigation, or **Explore the article graph** from the wiki's article list. The graph lives at `/w/WIKI/explore/graph`, so articles named `graph` or `explore` keep their URLs.

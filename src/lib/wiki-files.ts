@@ -2,6 +2,32 @@ import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { slugify, titleFromSlug, validSlug } from "./wiki";
+import { worldOverviewSlug } from "./world-overview";
+
+// Read only the wiki's stub, so homepage metadata stays current without an import.
+export async function readWikiDefinition(directory: string, wiki: string) {
+  if (!validSlug(wiki)) throw new Error("Invalid wiki slug.");
+  const fallback = { title: titleFromSlug(wiki), subtitle: "", mainPageSlug: undefined as string | undefined };
+  const wikiDirectory = path.join(directory, wiki);
+  let entries;
+  try {
+    entries = await readdir(wikiDirectory, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
+    throw error;
+  }
+  const stubs = entries.filter((entry) => entry.isFile() && /^stub-.*\.md$/i.test(entry.name));
+  if (stubs.length === 0) return fallback;
+  if (stubs.length > 1) throw new Error(`Expected one homepage stub in wiki-files/${wiki}; found ${stubs.length}.`);
+
+  const { data, content } = matter(await readFile(path.join(wikiDirectory, stubs[0].name), "utf8"));
+  const heading = content.match(/^#\s+(.+?)\s*$/m)?.[1].replace(/\s+#+\s*$/, "").trim();
+  const title = String(data.title ?? heading ?? fallback.title).trim();
+  const slug = slugify(String(data.slug ?? path.basename(stubs[0].name, path.extname(stubs[0].name))));
+  const mainPageSlug = worldOverviewSlug({ slug, title, content }, wiki);
+  if (!mainPageSlug) throw new Error(`No valid target link in wiki-files/${wiki}/${stubs[0].name}.`);
+  return { title, subtitle: String(data.subtitle ?? "").trim(), mainPageSlug };
+}
 
 async function findMarkdownFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });

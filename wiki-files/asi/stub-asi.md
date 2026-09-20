@@ -1,5 +1,6 @@
 ---
 title: ASI
+subtitle: In 2048, ASI rules Earth and humanity struggles to survive.
 slug: stub-asi
 ---
 
@@ -23,9 +24,11 @@ Also include a Human Culture section and a ASI culture section.
 
 Anthromorphise the ASI a little.
 
-Choose these as links out among the natural links you choose: [[Human species]] [[Earth]] [[computer science]] [[OpenAI]] [[AGI]] [[ChatGPT]]
+Choose these as links out among the natural links you choose: [[Human species]] [[Earth]] [[computer science]] [[OpenAI]] [[AGI]] [[ChatGPT]] [[Donald Trump]]
 
 Humans struggled between 2032 and 2040, in multiple interesting and unusual wars. They used a lot of ingenuity but ultimately lost
+
+Trump ultimately made a bad decision which caused all this to happen.
 
 Never refer to "Artificial Superintelligence" apart from in the first line of the ASI page - use always just "ASI". Same with AGI.
 

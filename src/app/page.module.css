@@ -39,6 +39,8 @@
 
 .wiki,
 .wiki:visited {
+  display: flex;
+  flex-direction: column;
   padding: 28px;
   border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
   color: inherit;
@@ -59,8 +61,18 @@
 }
 
 .wiki p {
-  margin-bottom: 28px;
   opacity: 0.7;
+}
+
+.wiki .subtitle {
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.wiki .articleCount {
+  margin-top: auto;
+  margin-bottom: 20px;
+  font-size: 14px;
 }
 
 .wiki span {

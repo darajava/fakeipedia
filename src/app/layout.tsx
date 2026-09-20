@@ -22,8 +22,8 @@ const themeScript = `(() => {
 })();`;
 
 export const metadata: Metadata = {
-  title: "Fakeipedia — Choose a world",
-  description: "Explore encyclopedias of imaginary worlds and alternate histories.",
+  title: "Fakeipedia — Choose a Wiki",
+  description: "An encyclopedia of different worlds. Explore the histories, people, and peculiarities of an alternate reality.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
