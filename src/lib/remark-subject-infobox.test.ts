@@ -60,7 +60,7 @@ for (const savedPage of [true, false]) {
     assert.match(box, /<strong>Atlantis<\/strong>/);
     assert.match(box, /Capital of the underwater civilisation\./);
     assert.match(box, /loading="eager"/);
-    assert.match(box, /\/w\/atlantis\/nacre\?title=Nacre/);
+    assert.match(box, /\/atlantis\/nacre\?title=Nacre/);
     assert.equal((box.match(/>the reef capital<\/a>/g) ?? []).length, 1);
     assert.doesNotMatch(box, /title=Atlantis"/);
     assert.equal((html.match(/<img[^>]*atlantis_main.png/g) ?? []).length, 1);
@@ -89,8 +89,8 @@ for (const savedPage of [true, false]) {
   for (const imageState of ["ready", "loading", "unavailable"] as const) {
     test(`infobox caption links work in the ${savedPage ? "saved article" : "preview"} with a ${imageState} image`, () => {
       const html = render('![Monument](./images/atlantis_main.png "The Monument in [[New London]], governed by [[Grand Matriarchate]].")', savedPage, imageState);
-      assert.match(html, /<a href="\/w\/atlantis\/new-london">New London<\/a>/);
-      assert.match(html, /href="\/w\/atlantis\/grand-matriarchate\/generate\?title=Grand%20Matriarchate&amp;source=atlantis" class="wiki-link-missing">Grand Matriarchate<\/a>/);
+      assert.match(html, /<a href="\/atlantis\/new-london">New London<\/a>/);
+      assert.match(html, /href="\/atlantis\/grand-matriarchate\/generate\?title=Grand%20Matriarchate&amp;source=atlantis" class="wiki-link-missing">Grand Matriarchate<\/a>/);
       assert.doesNotMatch(html, /\[New London\]|\[Grand Matriarchate\]/);
       for (const button of html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)) {
         assert.doesNotMatch(button[1], /<a\b/, "Caption links must be outside the image-opening button");
@@ -105,7 +105,7 @@ test("caption markup keeps inline formatting without enabling unsafe links or ne
     wiki: "atlantis", slug: "atlantis", existingSlugs: new Set(["new-london"]),
   }));
   assert.match(html, /<strong>Monument<\/strong>/);
-  assert.match(html, /href="\/w\/atlantis\/new-london"/);
+  assert.match(html, /href="\/atlantis\/new-london"/);
   assert.match(html, /href="https:\/\/example.com"/);
   assert.doesNotMatch(html, /javascript:|<img|<p>/);
 });

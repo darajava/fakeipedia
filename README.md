@@ -16,7 +16,9 @@ wiki-files/
 
 Use lowercase, hyphenated wiki directory names. The first directory determines the wiki; an article's optional frontmatter `slug` determines its article slug, falling back to its filename. Article names and image filenames can be reused in different wikis.
 
-Articles use `/w/WIKI/ARTICLE`, for example `/w/zorg/helion-system`. `/` lists imported wikis, and `/w/zorg` lists Zorg's articles. Existing `/wiki/ARTICLE` URLs redirect to Zorg.
+Articles use `/WIKI/ARTICLE`, for example `/zorg/helion-system`. `/` lists imported wikis, and `/zorg` lists Zorg's articles. Existing `/w/WIKI/...` URLs permanently redirect to the shorter paths, preserving query parameters. Existing `/wiki/ARTICLE` URLs redirect to Zorg. Wiki names `api`, `w`, `wiki`, `wiki-images`, `search`, and `random` are reserved for site routes.
+
+To arrange homepage cards, edit `homepage-order.txt` in the project root. Move the wiki folder names up or down, one per line, and save. The homepage follows that order; unlisted wikis appear alphabetically at the end. Blank lines and lines starting with `#` are ignored. Refresh the homepage to see changes locally; copy the updated file to the server for the live site.
 
 Homepage cards read their display title and subtitle directly from the frontmatter of each wiki's `stub-*.md` file. Keep one stub at the top level of each wiki directory. Editing these fields updates the homepage without reimporting or regenerating articles:
 
@@ -32,7 +34,7 @@ Each card opens the stub's last linked article (the same target used for initial
 
 ## Article graph
 
-Open **Article graph** from an article's navigation, or **Explore the article graph** from the wiki's article list. The graph lives at `/w/WIKI/explore/graph`, so articles named `graph` or `explore` keep their URLs.
+Open **Article graph** from an article's navigation, or **Explore the article graph** from the wiki's article list. The graph lives at `/WIKI/explore/graph`, so articles named `graph` or `explore` keep their URLs.
 
 Drag an article node with gentle spring resistance; a quick release carries its momentum, which fades with friction. Connected articles subtly follow the movement. This interaction uses a bounded local spring system (the dragged article and up to 48 actual neighbours), keeping large wikis responsive. Holding still before release stops the fling, and reduced-motion preferences disable inertia. Drag the background to pan, scroll or pinch to zoom, and click a node to read its article. Search can find and focus any article, including isolated articles. Keyboard controls are arrow keys to pan, `+`/`-` to zoom, `Home` to fit the graph, and `Enter` to open the focused article. The searchable article links also work without WebGL 2.
 
@@ -61,7 +63,7 @@ To add another world, create its directory with at least one Markdown article an
 
 Wiki Markdown files and image directories are ignored by Git. Keep `wiki-files` available on the server when running the app.
 
-Use `[[Article name]]` or `[[Article name|display text]]` for links within a wiki, and `./images/filename.png` for images. Explicit links such as `[Rome](/w/roman-empire/rome)` can point to other wikis. Legacy `/wiki/ARTICLE` links inside articles resolve within the current wiki.
+Use `[[Article name]]` or `[[Article name|display text]]` for links within a wiki, and `./images/filename.png` for images. Explicit links such as `[Rome](/roman-empire/rome)` can point to other wikis. Legacy `/wiki/ARTICLE` links inside articles resolve within the current wiki.
 
 Article generation uses Gemini 3.8 Flash (`gemini-3.8-flash`) with high reasoning and only the current wiki's catalogue and source article as context. It saves new Markdown and images inside that wiki's directory. Text generation requires `GEMINI_API_KEY` in `.env`; image generation requires `OPENAI_API_KEY`.
 

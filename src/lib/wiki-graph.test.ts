@@ -4,13 +4,13 @@ import { graphArticleLinks, type GraphRow } from "./wiki-graph";
 import { buildGraph, graphBounds, graphNodePath, relaxGraph, relaxGraphSteps, SpatialGrid } from "./graph-layout";
 
 test("graph links follow rendered Markdown, reference links and HTML within this wiki", () => {
-  const markdown = `[[City|the city]] [same city](/w/world/city#history)
+  const markdown = `[[City|the city]] [same city](/world/city#history)
 [Archive][ref] <a href='/wiki/harbor?title=Harbor'>port</a>
-<a href="/w/world/market">market</a>
-[other world](/w/other/city) [external](https://example.com/w/world/sea)
-[edit](/w/world/city/edit)
+<a href="/world/market">market</a>
+[other world](/other/city) [external](https://example.com/world/sea)
+[edit](/world/city/edit)
 
-[ref]: /w/world/archive
+[ref]: /world/archive
 `;
   assert.deepEqual(graphArticleLinks(markdown, "world"), ["city", "archive", "harbor", "market"]);
 });
@@ -21,9 +21,9 @@ test("preformatted links are graph edges while inline code, raw code HTML and im
 \`\`\`md
 [[Fenced code]] <a href="/wiki/code-html">test</a>
 \`\`\`
-![Picture](/w/world/picture)
+![Picture](/world/picture)
 <!-- <a href="/wiki/comment">comment</a> -->
-[unused]: /w/world/unused
+[unused]: /world/unused
 
 [[Real article]]
 `;
@@ -44,8 +44,8 @@ test("unwritten articles become shared red nodes, with accurate outgoing link co
   assert.deepEqual([...graph.blue], [2, 1, 0, 0]);
   assert.deepEqual([...graph.sources], [-1, -1, -1, 0]);
   assert.equal(graph.degree[3], 2);
-  assert.equal(graphNodePath("world", graph.nodes, 0, graph.savedCount, graph.sources), "/w/world/a");
-  assert.equal(graphNodePath("world", graph.nodes, 3, graph.savedCount, graph.sources), "/w/world/missing/generate?title=Missing&source=a");
+  assert.equal(graphNodePath("world", graph.nodes, 0, graph.savedCount, graph.sources), "/world/a");
+  assert.equal(graphNodePath("world", graph.nodes, 3, graph.savedCount, graph.sources), "/world/missing/generate?title=Missing&source=a");
   const grid = new SpatialGrid(graph.positions);
   for (let i = 0; i < 10; i++) relaxGraph(graph, grid, i);
   assert.ok(graph.positions.every(Number.isFinite));

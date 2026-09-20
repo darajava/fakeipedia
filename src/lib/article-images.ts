@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { link, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import OpenAI from "openai";
 import { extractArticleImages } from "./article-draft";
 
@@ -49,7 +49,9 @@ IMAGE REQUIRED:
 export async function generateArticleImages(
   { wiki, markdown, slug, title }: { wiki: string; markdown: string; slug: string; title: string },
   send: (message: ArticleImageMessage) => void,
-  { client, wikiDirectory = path.join(process.cwd(), "wiki-files"), filename }: { client?: OpenAI; wikiDirectory?: string; filename?: string } = {},
+  { client, wikiDirectory = path.join(process.cwd(), "wiki-files"), filename, prompt, onlyIfMissing = false }: {
+    client?: OpenAI; wikiDirectory?: string; filename?: string; prompt?: string; onlyIfMissing?: boolean;
+  } = {},
 ) {
   const images = extractArticleImages(markdown, slug).filter((image) => !filename || image.filename === filename);
   if (images.length === 0) return;
@@ -66,7 +68,7 @@ export async function generateArticleImages(
       const openai = client ?? new OpenAI();
       const result = await openai.images.generate({
         model: "gpt-image-2.5-flare",
-        prompt: buildArticleImagePrompt(title, markdown, image.description),
+        prompt: buildArticleImagePrompt(title, markdown, prompt ?? image.description),
         n: 1,
         size: "1536x864",
         quality: "high",
@@ -78,7 +80,17 @@ export async function generateArticleImages(
 
       const temporaryPath = path.join(archiveDirectory, `.${slug}-${crypto.randomUUID()}.tmp`);
       await writeFile(temporaryPath, Buffer.from(generatedImage, "base64"));
-      await rename(temporaryPath, path.join(archiveDirectory, image.filename));
+      try {
+        const destination = path.join(archiveDirectory, image.filename);
+        // Publish complete bytes atomically, without replacing an image that
+        // appeared while this retry was generating (including in another process).
+        if (onlyIfMissing) await link(temporaryPath, destination);
+        else await rename(temporaryPath, destination);
+      } finally {
+        await unlink(temporaryPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
     } catch (error) {
       console.error(`Image generation failed for ${wiki}/${image.filename}:`, error);
       send({ type: "image-error", filename: image.filename, message: "Could not generate this image." });

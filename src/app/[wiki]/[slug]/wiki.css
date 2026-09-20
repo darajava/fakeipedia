@@ -782,6 +782,32 @@ input {
   text-align: center;
 }
 
+.wiki-image-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+}
+
+.wiki-image-prompt textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.6rem;
+  border: 1px solid var(--wiki-border);
+  border-radius: 2px;
+  background: var(--wiki-surface);
+  color: var(--wiki-text);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.wiki-image-prompt textarea:focus-visible {
+  outline: 2px solid var(--wiki-link);
+  outline-offset: 2px;
+}
+
 .wiki-image-retry {
   min-height: 44px;
   padding: 0.4rem 0.9rem;

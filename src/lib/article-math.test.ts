@@ -33,7 +33,7 @@ $$
 E = mc^2
 $$`, saved);
     assert.match(html, /class="wiki-infobox"/);
-    assert.match(html, /href="\/w\/asi\/asi\?title=ASI"/);
+    assert.match(html, /href="\/asi\/asi\?title=ASI"/);
     assert.match(html, /class="katex"/);
     assert.match(html, /<msub>/);
     assert.match(html, /Ω/);

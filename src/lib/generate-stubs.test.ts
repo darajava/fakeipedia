@@ -59,6 +59,6 @@ test("CLI dry run reads stubs from disk without database or API credentials", as
     cwd: directory,
     env: { ...process.env, DATABASE_URL: "", GEMINI_API_KEY: "", OPENAI_API_KEY: "" },
   });
-  assert.ok(stdout.includes("ocean/stub-world → /w/ocean/ocean-world (Ocean World)"));
+  assert.ok(stdout.includes("ocean/stub-world → /ocean/ocean-world (Ocean World)"));
   assert.ok(stdout.includes("No database or generation calls made."));
 });

@@ -2,6 +2,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import path from "node:path";
 import { notFound, redirect } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -20,6 +21,7 @@ import { articles } from "@/db/schema";
 import { articleLink, articlePath, graphPath, imageSource, linkedArticleSlugs, prepareWikiLinks, wikiPath } from "@/lib/wiki";
 import { DeleteArticleButton } from "./delete-article-button";
 import { worldOverviewSlug } from "@/lib/world-overview";
+import { readWikiDefinition } from "@/lib/wiki-files";
 import "./wiki.css";
 
 type WikiPageProps = {
@@ -83,7 +85,10 @@ export default async function WikiPage({ params }: WikiPageProps) {
     notFound();
   }
 
-  const existingSlugs = await existingLinkedSlugs(article.content, wiki);
+  const [existingSlugs, { mainPageSlug }] = await Promise.all([
+    existingLinkedSlugs(article.content, wiki),
+    readWikiDefinition(path.join(process.cwd(), "wiki-files"), wiki),
+  ]);
   const retryableImages = extractArticleImages(article.content, article.slug);
   const markdown = prepareWikiLinks(article.content.replace(/^#\s+.+?(?:\r?\n)+/, ""), wiki);
 
@@ -109,10 +114,10 @@ export default async function WikiPage({ params }: WikiPageProps) {
       <div className="wiki-layout">
         <aside className="wiki-sidebar">
           <nav aria-label="Wiki navigation">
-            <Link href={wikiPath(wiki)}>Main page</Link>
+            <Link href={mainPageSlug ? articlePath(wiki, mainPageSlug) : wikiPath(wiki)}>Main page</Link>
             <Link href={graphPath(wiki)}>Article graph</Link>
             <Link href="/">All wikis</Link>
-            <Link href="/random">Random article</Link>
+            <a href={`/random?wiki=${encodeURIComponent(wiki)}`}>Random article</a>
           </nav>
         </aside>
 
@@ -187,7 +192,7 @@ export default async function WikiPage({ params }: WikiPageProps) {
                       caption={title ?? alt ?? ""}
                       captionContent={<WikiCaption text={title ?? alt ?? ""} wiki={wiki} slug={article.slug} existingSlugs={existingSlugs} />}
                       priority={className?.includes("wiki-subject-image")}
-                      retryImage={retryableImage ? { wiki, slug: article.slug, filename: retryableImage.filename } : undefined}
+                      retryImage={retryableImage ? { wiki, slug: article.slug, filename: retryableImage.filename, prompt: retryableImage.description } : undefined}
                     />
                   );
                 },

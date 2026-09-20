@@ -1,8 +1,10 @@
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
+import path from "node:path";
 import { eq } from "drizzle-orm";
-import { titleFromSlug, wikiPath } from "@/lib/wiki";
+import { articlePath, titleFromSlug, wikiPath } from "@/lib/wiki";
+import { readWikiDefinition } from "@/lib/wiki-files";
 
 import { GenerateArticle } from "./generate-article";
 import "../wiki.css";
@@ -43,12 +45,15 @@ export default async function GeneratePage({
 
   const title = query.title?.trim() || titleFromSlug(slug);
 
-  const existingArticles = await db
-    .select({
-      slug: articles.slug,
-    })
-    .from(articles)
-    .where(eq(articles.wiki, wiki));
+  const [existingArticles, { mainPageSlug }] = await Promise.all([
+    db
+      .select({
+        slug: articles.slug,
+      })
+      .from(articles)
+      .where(eq(articles.wiki, wiki)),
+    readWikiDefinition(path.join(process.cwd(), "wiki-files"), wiki),
+  ]);
 
   const existingArticleSlugs = existingArticles.map((article) => article.slug);
 
@@ -74,9 +79,9 @@ export default async function GeneratePage({
       <div className="wiki-layout">
         <aside className="wiki-sidebar">
           <nav aria-label="Wiki navigation">
-            <Link href={wikiPath(wiki)}>Main page</Link>
+            <Link href={mainPageSlug ? articlePath(wiki, mainPageSlug) : wikiPath(wiki)}>Main page</Link>
             <Link href="/">All wikis</Link>
-            <Link href="/random">Random article</Link>
+            <a href={`/random?wiki=${encodeURIComponent(wiki)}`}>Random article</a>
           </nav>
         </aside>
 

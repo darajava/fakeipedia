@@ -1,12 +1,12 @@
 import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
-import { slugify, titleFromSlug, validSlug } from "./wiki";
+import { slugify, titleFromSlug, validSlug, validWikiSlug } from "./wiki";
 import { worldOverviewSlug } from "./world-overview";
 
 // Read only the wiki's stub, so homepage metadata stays current without an import.
 export async function readWikiDefinition(directory: string, wiki: string) {
-  if (!validSlug(wiki)) throw new Error("Invalid wiki slug.");
+  if (!validWikiSlug(wiki)) throw new Error("Invalid wiki slug.");
   const fallback = { title: titleFromSlug(wiki), subtitle: "", mainPageSlug: undefined as string | undefined };
   const wikiDirectory = path.join(directory, wiki);
   let entries;
@@ -80,8 +80,8 @@ export async function readWikiArticles(directory: string) {
     const relativePath = path.relative(directory, filePath);
     const parts = relativePath.split(path.sep);
     const wiki = parts[0];
-    if (parts.length < 2 || !validSlug(wiki)) {
-      throw new Error(`Place ${relativePath} inside wiki-files/<wiki-slug>/ using a lowercase wiki slug.`);
+    if (parts.length < 2 || !validWikiSlug(wiki)) {
+      throw new Error(`Place ${relativePath} inside wiki-files/<wiki-slug>/ using a lowercase, non-reserved wiki slug.`);
     }
 
     const { data, content } = matter(await readFile(filePath, "utf8"));

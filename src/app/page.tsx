@@ -1,5 +1,6 @@
 import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { asc, count, notLike } from "drizzle-orm";
 import { db } from "@/db";
@@ -17,6 +18,16 @@ export default async function Home() {
     .where(notLike(articles.slug, "stub-%"))
     .groupBy(articles.wiki)
     .orderBy(asc(articles.wiki));
+  const homepageOrder = (await readFile(path.join(process.cwd(), "homepage-order.txt"), "utf8"))
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+  const position = (wiki: string) => {
+    const index = homepageOrder.indexOf(wiki);
+    return index === -1 ? homepageOrder.length : index;
+  };
+  // Preserve the query's alphabetical order for wikis missing from the list.
+  rows.sort((a, b) => position(a.wiki) - position(b.wiki));
   const wikis = await Promise.all(rows.map(async (row) => ({
     ...row,
     ...await readWikiDefinition(path.join(process.cwd(), "wiki-files"), row.wiki),

@@ -2,6 +2,12 @@ export function validSlug(value: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
+const reservedWikiSlugs = new Set(["api", "w", "wiki", "wiki-images", "search", "random"]);
+
+export function validWikiSlug(value: string): boolean {
+  return validSlug(value) && !reservedWikiSlugs.has(value);
+}
+
 export function slugify(value: string): string {
   return value
     .normalize("NFKD")
@@ -21,7 +27,7 @@ export function titleFromSlug(slug: string): string {
 }
 
 export function wikiPath(wiki: string): string {
-  return `/w/${encodeURIComponent(wiki)}`;
+  return `/${encodeURIComponent(wiki)}`;
 }
 
 export function articlePath(wiki: string, slug: string): string {
@@ -45,19 +51,19 @@ export function prepareWikiLinks(markdown: string, wiki: string): string {
 
 // Old links embedded in saved articles stay inside their current wiki.
 export function articleLink(href: string | undefined, currentWiki: string) {
-  if (!href?.startsWith("/wiki/") && !href?.startsWith("/w/")) {
+  if (!href?.startsWith("/") || href.startsWith("//")) {
     return undefined;
   }
 
   const url = new URL(href, "http://fakeipedia.local");
   const legacyMatch = url.pathname.match(/^\/wiki\/([^/]+)\/?$/);
-  const match = url.pathname.match(/^\/w\/([^/]+)\/([^/]+)\/?$/);
+  const match = url.pathname.match(/^\/(?:w\/)?([^/]+)\/([^/]+)\/?$/);
   if (!legacyMatch && !match) return undefined;
 
   try {
-    const wiki = match ? decodeURIComponent(match[1]).toLowerCase() : currentWiki;
-    const slug = decodeURIComponent(match ? match[2] : legacyMatch![1]).toLowerCase();
-    if (!validSlug(wiki) || !validSlug(slug)) return undefined;
+    const wiki = legacyMatch ? currentWiki : decodeURIComponent(match![1]).toLowerCase();
+    const slug = decodeURIComponent(legacyMatch ? legacyMatch[1] : match![2]).toLowerCase();
+    if (!validWikiSlug(wiki) || !validSlug(slug)) return undefined;
 
     // Keep the original title for missing-article generation, but leave it out
     // of normal article URLs: existing articles already have a saved title.

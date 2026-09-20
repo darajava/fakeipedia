@@ -65,3 +65,36 @@ test("an interrupted response propagates without attempting to revise partial te
   }), /Connection interrupted/);
   assert.equal(calls, 1);
 });
+
+test("allows Unicode and ASCII diagrams in fenced, indented and ordinary text", () => {
+  for (const diagram of [
+    "```\nRaw Exfiltrated Relational Data (71.4 PB)\n       │\n       ▼\n[Deterministic B-Tree Indexer]\n┌──────┴──────┐\n[Phone]    [Civic ID]\n```",
+    "~~~text\n[A] --> [B]\n~~~",
+    "    [A]\n     |\n     v\n    [B]",
+    "[A]\n│\n▼\n[B]",
+    "[A] --> [B]",
+    "```\n+----------+\n| Atlantis |\n+----------+\n```",
+  ]) {
+    assert.deepEqual(articleDraftIssues(`${ordinary}\n\n${diagram}`, "atlantis", false), []);
+    assert.deepEqual(articleDraftIssues(`${featured}\n\n${diagram}`, "atlantis", true), []);
+  }
+});
+
+test("keeps ordinary tables, lists, inline code, code examples and TeX valid", () => {
+  const content = `${ordinary}\n\n| Era | People |\n| --- | --- |\n| First | 200 |\n\n1. Index the records.\n2. Search by name.\n\nUse \`a --> b\` as notation.\n\n\`\`\`js\nconst total = 3 + 4;\n\`\`\`\n\n$$\n\\begin{vmatrix}a & b \\\\ c & d\\end{vmatrix}\n$$`;
+  assert.deepEqual(articleDraftIssues(content, "atlantis", false), []);
+});
+
+test("a diagram-containing draft is returned for persistence without a revision", async () => {
+  let calls = 0;
+  const diagram = "\n\n```\n[A]\n│\n▼\n[B]\n```\n\nThe districts are connected.";
+  const messages: object[] = [];
+  const result = await generateArticleDraft({ prompt: "No text diagrams", slug: "atlantis", isWorldOverview: false }, (message) => messages.push(message), async function* () {
+    calls++;
+    yield ordinary;
+    yield diagram;
+  });
+  assert.equal(result, ordinary + diagram);
+  assert.equal(calls, 1);
+  assert.deepEqual(messages, [{ type: "delta", delta: ordinary }, { type: "delta", delta: diagram }]);
+});

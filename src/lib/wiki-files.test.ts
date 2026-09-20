@@ -49,6 +49,12 @@ test("requires articles to live under a wiki directory", async () => {
   });
 });
 
+test("rejects wiki directories that conflict with site routes", async () => {
+  await fixture({ "api/history.md": "# History" }, async (directory) => {
+    await assert.rejects(readWikiArticles(directory), /non-reserved wiki slug/);
+  });
+});
+
 test("homepage definitions preserve stub titles and subtitles and use the final target link", async () => {
   await fixture({
     "asi/stub-asi.md": "---\ntitle: ASI\nsubtitle: Humanity in 2048.\nslug: stub-asi\n---\n[[Earth]] [[ASI]]",

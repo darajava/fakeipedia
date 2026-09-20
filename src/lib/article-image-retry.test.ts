@@ -36,12 +36,21 @@ test("image retry validates ownership, isolates failure and saves only the reque
   t.mock.method(console, "error", () => {});
   let calls = 0;
   let fail = true;
+  let expectedDescription = "A coral harbor";
+  let started!: () => void;
+  const generationStarted = new Promise<void>((resolve) => { started = resolve; });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
   t.mock.method(globalThis, "fetch", async (url: string | URL | Request, init?: RequestInit) => {
     calls++;
     assert.equal(String(url), "https://api.openai.com/v1/images/generations");
     const body = JSON.parse(String(init?.body));
-    assert.ok(body.prompt.includes("IMAGE REQUIRED:\n\nA coral harbor"));
+    assert.ok(body.prompt.includes(`IMAGE REQUIRED:\n\n${expectedDescription}`));
     assert.ok(body.prompt.includes(article.content));
+    if (!fail) {
+      started();
+      await gate;
+    }
     return Response.json(fail ? { data: [] } : { data: [{ b64_json: Buffer.from("retried image").toString("base64") }] });
   });
   const input = { wiki: "atlantis", slug: "harbor", filename: "harbor_failed.png" };
@@ -49,7 +58,9 @@ test("image retry validates ownership, isolates failure and saves only the reque
     method: "POST", body: JSON.stringify(body),
   }));
 
-  for (const body of [null, {}, { ...input, wiki: "../escape" }, { ...input, slug: "../escape" }]) {
+  for (const body of [null, {}, { ...input, wiki: "../escape" }, { ...input, slug: "../escape" },
+    ...[null, 123, "", "  ", "x".repeat(32_001)].map((prompt) => ({ ...input, prompt })),
+  ]) {
     assert.equal((await request(body)).status, 400);
   }
   assert.equal((await POST(new Request("http://localhost/api/articles/images/retry", { method: "POST", body: "{" }))).status, 400);
@@ -65,14 +76,24 @@ test("image retry validates ownership, isolates failure and saves only the reque
   const imagesDirectory = path.join(directory, "wiki-files/atlantis/images");
   await mkdir(imagesDirectory, { recursive: true });
   await writeFile(path.join(imagesDirectory, "harbor_success.png"), "original image");
+  assert.equal((await request({ ...input, filename: "harbor_success.png", prompt: "Replace the existing image" })).status, 409);
+  assert.equal(calls, 0);
   const failed = await request(input);
   assert.equal(failed.status, 502);
   assert.match((await failed.json()).error, /try again/i);
   fail = false;
-  const success = await request(input);
+  expectedDescription = "A quiet coral harbor at sunrise, without people.";
+  const pending = request({ ...input, prompt: `  ${expectedDescription}  ` });
+  await generationStarted;
+  assert.equal((await request(input)).status, 409);
+  assert.equal(calls, 2);
+  release();
+  const success = await pending;
   assert.equal(success.status, 200);
   assert.match((await success.json()).url, /^\/wiki-images\/atlantis\/harbor_failed\.png\?v=.+/);
   assert.equal(calls, 2);
   assert.equal(await readFile(path.join(imagesDirectory, "harbor_failed.png"), "utf8"), "retried image");
   assert.equal(await readFile(path.join(imagesDirectory, "harbor_success.png"), "utf8"), "original image");
+  assert.equal((await request({ ...input, prompt: "Another version" })).status, 409);
+  assert.equal(calls, 2, "completed images must not trigger another generation request");
 });

@@ -6,6 +6,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
 import { articleLink, articlePath, prepareWikiLinks } from "@/lib/wiki";
 import { WikiImage } from "@/components/wiki-image";
 import { WikiCaption } from "@/components/wiki-caption";
@@ -152,7 +153,7 @@ export function GenerateArticle({
             captionContent={captionContent}
             priority={className?.includes("wiki-subject-image")}
             unavailable={Boolean(filename && failedImages[filename])}
-            retryImage={filename ? { wiki, slug, filename } : undefined}
+            retryImage={filename ? { wiki, slug, filename, prompt: alt ?? "" } : undefined}
           />
         );
       },
@@ -306,7 +307,7 @@ export function GenerateArticle({
         <article className="wiki-article wiki-generation-preview">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title, wiki, slug }]]}
-            rehypePlugins={[rehypeKatex, rehypeCodeLinks]}
+            rehypePlugins={[rehypeRaw, rehypeKatex, rehypeCodeLinks]}
             components={markdownComponents}
           >
             {prepareWikiLinks(markdown, wiki)}

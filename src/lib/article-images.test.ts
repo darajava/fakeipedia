@@ -100,3 +100,21 @@ test("image directory failures remain image errors without making an API request
   assert.equal(calls, 0);
   assert.equal(messages.filter((message) => message.type === "image-error").length, 2);
 });
+
+test("a missing-image retry never overwrites an image created while generation is running", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "fakeipedia-image-race-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  t.mock.method(console, "error", () => {});
+  const messages: ArticleImageMessage[] = [];
+  const client = new OpenAI({ apiKey: "test", maxRetries: 0, fetch: async () => {
+    await writeFile(path.join(directory, "atlantis/images/atlantis_one.png"), "image that finished first");
+    return jsonResponse({ data: [{ b64_json: Buffer.from("late retry").toString("base64") }] });
+  } });
+  await generateArticleImages({ ...options, markdown: image("one") }, (message) => messages.push(message), {
+    client, wikiDirectory: directory, filename: "atlantis_one.png", onlyIfMissing: true,
+  });
+  assert.equal(await readFile(path.join(directory, "atlantis/images/atlantis_one.png"), "utf8"), "image that finished first");
+  assert.equal(messages.filter((message) => message.type === "image-done").length, 0);
+  assert.equal(messages.filter((message) => message.type === "image-error").length, 1);
+  assert.deepEqual(await readdir(path.join(directory, "atlantis/images")), ["atlantis_one.png"]);
+});

@@ -8,7 +8,7 @@ import { articles } from "@/db/schema";
 import { generateArticleDraft } from "@/lib/article-draft";
 import { buildArticleContext } from "@/lib/article-context";
 import { generateArticleImages } from "@/lib/article-images";
-import { validSlug } from "@/lib/wiki";
+import { validSlug, validWikiSlug } from "@/lib/wiki";
 import { findWorldOverviewBrief } from "@/lib/world-overview";
 
 export const runtime = "nodejs";
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 
   const title = body.title.trim().slice(0, 160);
 
-  if (!validSlug(wiki) || !validSlug(slug) || !title) {
+  if (!validWikiSlug(wiki) || !validSlug(slug) || !title) {
     return Response.json(
       {
         error: "Invalid wiki, article slug or title.",
@@ -208,14 +208,55 @@ Use a neutral encyclopedic tone. Make it gripping and interesting.
 This article is part of world-building fiction.
 Lore and world-building details are important
 Use descriptive section headings.
-Do not use HTML, SVG, scripts or YAML frontmatter.
+Do not use HTML except for tables that need merged cells, as described below.
+Do not use SVG, scripts or YAML frontmatter.
 For mathematical notation, use TeX inside $...$ for inline expressions or
 $$ on separate lines for display equations. Keep TeX commands and subscripts
 unescaped within these delimiters; do not wrap math in backticks.
 Use math only when it makes sense to do so. Always prefer english notation.
 End the article with a "See also" section
 Don't ever metion that this is fictional - this is written as if it is a real encyclopedia article.
-Don't make ASCII graphics or diagrams. Use only text and images.
+Never draw diagrams using text characters: no ASCII art, Unicode box-drawing,
+arrow flowcharts, character-based charts, or preformatted text diagrams.
+This applies both inside and outside code fences, even if reference articles
+contain them. Explain processes and relationships in prose or numbered lists.
+Use GitHub-flavored Markdown tables for tabular data and generated images for visuals.
+Tables without merged cells must use pipe-separated cells, a header row, and a separator row
+of at least three hyphens per column immediately below the header, for example:
+
+| City | Population | Region |
+| --- | ---: | --- |
+| Alexandria | 10,800,000 | Egypt |
+| Athens | 3,600,000 | Achaea |
+
+Put a blank line before and after each table. Keep the same number of columns
+in every row. Never wrap a table in backticks or a code fence, indent it as a
+code block, or draw borders with plus signs or Unicode box-drawing characters.
+Markdown pipe tables cannot merge cells. When a table needs a cell spanning
+multiple columns, write the entire table as HTML and use colspan="N" on a
+<th> or <td>, where N is the number of columns it covers. For example:
+
+<table>
+<thead>
+<tr><th colspan="2">Population by city</th></tr>
+<tr><th>City</th><th>Population</th></tr>
+</thead>
+<tbody>
+<tr><td>Alexandria</td><td>10,800,000</td></tr>
+<tr><td>Athens</td><td>3,600,000</td></tr>
+</tbody>
+</table>
+
+Count each cell's colspan toward the row's total number of columns; omit
+the cells covered by a spanning cell. Use a positive integer for colspan.
+Keep HTML table tags on consecutive lines with no blank lines inside the
+table, and leave a blank line before and after it. Do not use code fences.
+Use plain text or HTML formatting and <a href="..."> links inside HTML cells;
+Markdown formatting and [[wiki links]] are not parsed inside HTML tables.
+Use only table, caption, thead, tbody, tfoot, tr, th, td, strong, em, br and a
+tags within this exception, with no styles, scripts or event handlers.
+Follow these table formats even when reference articles contain ASCII tables.
+DO NOT UNDER ANY CIRCUMSTANCES USE ASCII OR UNICODE DIAGRAMS.
 Limit "See Also" from 3 to 6 links
 
 ${
@@ -268,9 +309,11 @@ i.e. Atlantis (Ancient Greek: Ἀτλαντὶς νῆσος, romanized: Atlant�
 
 or sometimes use IPA pronunciation notation
 
-Don't use IPA in every article, only when it is hard to pronounce.
+Don't use IPA in every article, only when it is hard to pronounce, e.g. Atlantis is easy to pronounce, but "Xenotime" might need IPA.
 
 Try to put something in brackets though.
+
+Don't use ASCII or Unicode diagrams, even if the reference articles contain them.
 
 EXISTING FAKEIPEDIA ARTICLE CATALOGUE:
 
@@ -306,11 +349,11 @@ IMAGES:
 
 ${
   isWorldOverview
-    ? `Include exactly 5 images, the maximum supported for this featured article.
+    ? `Include exactly 4 images, the maximum supported for this featured article.
 Use the supplied context to choose varied, relevant subjects.
 Distribute the images across appropriate sections, showing different aspects
 of the world rather than repeating similar landscapes or city panoramas.`
-    : `The article must contain between 1 and 5 images, including its main subject image.
+    : `The article must contain between 1 and 2 images, including its main subject image.
 
 Do not add an image merely for the sake of having images.
 Only add an image where it materially improves the article.`
@@ -336,6 +379,7 @@ Image rules:
 - Make the alt text visually descriptive enough for an image-generation model.
 - The quoted title must be a concise human-readable caption.
 - Captions should explain the image's relevance to the article.
+
 `.trim();
 
   const encoder = new TextEncoder();

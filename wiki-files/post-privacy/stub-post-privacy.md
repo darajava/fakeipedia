@@ -29,4 +29,4 @@ Include **exactly four images**, the maximum supported.
 
 ## Target article
 
-[[The Great Leak of 2027]]
+[[The Post-privacy Era]]

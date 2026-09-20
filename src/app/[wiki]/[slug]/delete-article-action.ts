@@ -20,6 +20,6 @@ export async function deleteArticle(wiki: string, slug: string) {
 
   revalidatePath("/");
   revalidatePath(wikiPath(wiki));
-  revalidatePath("/w/[wiki]/[slug]", "page");
+  revalidatePath("/[wiki]/[slug]", "page");
   return { success: true };
 }

@@ -1,0 +1,9 @@
+# Homepage wiki order: move lines up or down, then save.
+# Use folder names from wiki-files, one per line.
+# Unlisted wikis appear alphabetically at the end.
+
+asi
+post-privacy
+hellas
+1984
+conspiracy

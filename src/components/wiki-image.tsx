@@ -9,7 +9,7 @@ type WikiImageProps = {
   captionContent?: ReactNode;
   priority?: boolean;
   unavailable?: boolean;
-  retryImage?: { wiki: string; slug: string; filename: string };
+  retryImage?: { wiki: string; slug: string; filename: string; prompt: string };
 };
 
 export function WikiImage({ src, alt, caption, captionContent, priority = false, unavailable = false, retryImage }: WikiImageProps) {
@@ -18,13 +18,16 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
   const [replacement, setReplacement] = useState<{ original: string; url: string }>();
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string>();
+  const [editedPrompt, setEditedPrompt] = useState<{ source: string; value: string }>();
   const retryInFlight = useRef(false);
   const imageSource = replacement?.original === src ? replacement.url : src;
   const captionId = useId();
+  const promptId = useId();
+  const prompt = editedPrompt?.source === src ? editedPrompt.value : retryImage?.prompt ?? alt;
   const renderedCaption = captionContent ?? (caption || alt);
 
   async function retry() {
-    if (retryInFlight.current) return;
+    if (retryInFlight.current || (retryImage && !prompt.trim())) return;
     retryInFlight.current = true;
     setRetrying(true);
     setRetryError(undefined);
@@ -34,7 +37,7 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
         const response = await fetch("/api/articles/images/retry", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(retryImage),
+          body: JSON.stringify({ ...retryImage, prompt: prompt.trim() }),
         });
         const result = await response.json();
         if (!response.ok || typeof result.url !== "string" || !result.url) {
@@ -48,8 +51,8 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
       }
       setReplacement({ original: src, url });
       setFailedSource(undefined);
-    } catch {
-      setRetryError("Image retry failed. Please try again.");
+    } catch (error) {
+      setRetryError(error instanceof Error ? error.message : "Image retry failed. Please try again.");
     } finally {
       retryInFlight.current = false;
       setRetrying(false);
@@ -86,8 +89,19 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
         <span className="wiki-image-unavailable" aria-busy={retrying}>
           {retrying && <span className="wiki-loading-spinner" aria-hidden="true" />}
           <span role="status">{retrying ? "Retrying image…" : retryError || "Image unavailable"}</span>
-          <button type="button" className="wiki-image-retry" onClick={retry} disabled={retrying}>
-            {retrying ? "Retrying…" : retryImage ? "Redo image" : "Retry image"}
+          {retryImage && <span className="wiki-image-prompt">
+            <label htmlFor={promptId}>Image prompt</label>
+            <textarea
+              id={promptId}
+              value={prompt}
+              onChange={(event) => setEditedPrompt({ source: src, value: event.target.value })}
+              rows={5}
+              maxLength={32_000}
+              disabled={retrying}
+            />
+          </span>}
+          <button type="button" className="wiki-image-retry" onClick={retry} disabled={retrying || Boolean(retryImage && !prompt.trim())}>
+            {retrying ? "Retrying…" : "Retry image"}
           </button>
         </span>
         <span className="wiki-image-caption"><span>{renderedCaption}</span></span>
