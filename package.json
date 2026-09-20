@@ -10,6 +10,7 @@
     "test": "node --import tsx --test src/lib/*.test.ts",
     "db:migrate": "drizzle-kit migrate",
     "import:wiki": "node --import tsx src/scripts/import-wiki.ts",
+    "generate:stubs": "node --import tsx src/scripts/generate-stubs.ts",
     "reset:wiki": "node --import tsx src/scripts/reset-wiki.ts"
   },
   "dependencies": {

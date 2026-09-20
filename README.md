@@ -53,7 +53,15 @@ Use `[[Article name]]` or `[[Article name|display text]]` for links within a wik
 
 Article generation uses Gemini 3.8 Flash (`gemini-3.8-flash`) with high reasoning and only the current wiki's catalogue and source article as context. It saves new Markdown and images inside that wiki's directory. Text generation requires `GEMINI_API_KEY` in `.env`; image generation requires `OPENAI_API_KEY`.
 
-Generating an article from its matching `stub-<article-slug>` source requests a featured wiki overview of 2,500–3,500 words with five images. The stub supplies the world brief, broad subject coverage and image plan. After editing stubs, import them again so generation uses the updated database copies.
+Generating an article from a stub requests a featured wiki overview with five images. The stub supplies the world brief, broad subject coverage and image plan. Its last article link determines the overview target, including when earlier links or a target section are present.
+
+## Generate initial pages from stubs
+
+Run `npm run generate:stubs -- --dry-run` to preview the target page for every stub without connecting to the database or calling generation APIs.
+
+Run `npm run generate:stubs` to load the latest stubs from `wiki-files` and generate their initial pages one at a time, using the same text and image generation as the app. No running web server or separate import is needed. Configure `DATABASE_URL` and `GEMINI_API_KEY` in `.env`, apply database migrations first, and set `OPENAI_API_KEY` for images.
+
+Stubs are articles whose slug begins with `stub-`. The last link supplies the target title and slug; for `[[Article name|display text]]`, the title is `Article name`. Existing target pages in the database or local Markdown files are preserved and skipped. Missing or invalid target links stop the run before any changes. Generation failures are reported and the remaining stubs continue; the command exits unsuccessfully if any page failed. Optional image failures are reported while keeping the saved page.
 
 ## Reset wiki content
 

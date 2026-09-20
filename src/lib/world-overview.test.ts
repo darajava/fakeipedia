@@ -8,9 +8,10 @@ const stub = {
   content: "A broad world brief. [[Atlantis|Enter this wiki]]",
 };
 
-test("explicit target section identifies the overview even with other links in the brief", () => {
+test("last link identifies the overview regardless of section headings", () => {
   const brief = { ...stub, content: "Suggested [[Nacre]]\n\n## Target article\n\n[[Atlantis]]\n\n## Notes\n[[Other]]" };
-  assert.equal(findWorldOverviewBrief([brief], "atlantis", "atlantis"), brief);
+  assert.equal(findWorldOverviewBrief([brief], "atlantis", "other"), brief);
+  assert.equal(findWorldOverviewBrief([brief], "atlantis", "atlantis"), undefined);
   assert.equal(findWorldOverviewBrief([brief], "atlantis", "nacre"), undefined);
 });
 
