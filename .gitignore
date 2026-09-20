@@ -40,6 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Local wiki content
+# Local wiki content (keep stub files trackable)
 /wiki-files/**/*.md
-/wiki-files/**/images/
+/wiki-files/**/images/**
+!/wiki-files/**/
+!/wiki-files/**/stub-*
