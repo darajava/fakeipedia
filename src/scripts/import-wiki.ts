@@ -27,7 +27,6 @@ async function main() {
         set: {
           title: article.title,
           content: article.content,
-          isPremium: article.isPremium,
           updatedAt: new Date(),
         },
       });

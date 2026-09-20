@@ -28,6 +28,11 @@ export function articlePath(wiki: string, slug: string): string {
   return `${wikiPath(wiki)}/${encodeURIComponent(slug)}`;
 }
 
+export function graphPath(wiki: string): string {
+  // Two segments keep articles named "graph" or "explore" accessible.
+  return `${wikiPath(wiki)}/explore/graph`;
+}
+
 export function prepareWikiLinks(markdown: string, wiki: string): string {
   return markdown.replace(
     /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,

@@ -1,16 +1,3 @@
-:root {
-  --wiki-background: #f8f9fa;
-  --wiki-surface: #ffffff;
-  --wiki-text: #202122;
-  --wiki-muted: #54595d;
-  --wiki-border: #a2a9b1;
-  --wiki-border-light: #c8ccd1;
-  --wiki-link: #3366cc;
-  --wiki-link-visited: #795cb2;
-  --wiki-tab-background: #eaecf0;
-  --wiki-infobox-heading: #cedff2;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -184,7 +171,7 @@ input {
   border-top: 0;
   border-bottom: 0;
   background: transparent;
-  color: #b32424;
+  color: var(--wiki-danger);
   cursor: pointer;
 }
 
@@ -200,7 +187,7 @@ input {
 
 .wiki-delete-error {
   max-width: 280px;
-  color: #b32424;
+  color: var(--wiki-danger);
   white-space: normal;
 }
 
@@ -265,6 +252,12 @@ input {
   margin: 8px 0 12px;
 }
 
+.wiki-article .wiki-hatnote {
+  margin: 16px 0;
+  padding-inline-start: 1.6em;
+  font-style: italic;
+}
+
 .wiki-article a,
 .wiki-article a:visited {
   color: var(--wiki-link);
@@ -272,7 +265,7 @@ input {
 
 .wiki-article a.wiki-link-missing,
 .wiki-article a.wiki-link-missing:visited {
-  color: #ba0000;
+  color: var(--wiki-missing);
 }
 
 .wiki-article ul,
@@ -371,8 +364,8 @@ input {
 
 .wiki-article code {
   padding: 1px 4px;
-  background: #f0f1f2;
-  border: 1px solid #eaecf0;
+  background: var(--wiki-code);
+  border: 1px solid var(--wiki-tab-background);
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-size: 0.92em;
 }
@@ -391,6 +384,13 @@ input {
   padding: 0;
   background: transparent;
   border: 0;
+}
+
+.wiki-article .katex-display {
+  max-width: 100%;
+  padding-block: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .wiki-article hr {
@@ -431,11 +431,11 @@ input {
   }
 
   .wiki-logo {
-    width: 100%;
     font-size: 22px;
   }
 
   .wiki-search {
+    order: 1;
     width: 100%;
   }
 
@@ -512,12 +512,12 @@ input {
 .wiki-generator {
   max-width: 960px;
   min-height: 60vh;
-  background: #fff;
+  background: var(--wiki-surface);
 }
 
 .wiki-generation-status {
   margin: 0 0 1.5rem;
-  color: #54595d;
+  color: var(--wiki-muted);
   font-style: italic;
 }
 
@@ -528,15 +528,16 @@ input {
 
 .wiki-generation-error {
   padding: 1rem;
-  border: 1px solid #b32424;
-  background: #fee7e6;
-  color: #202122;
+  border: 1px solid var(--wiki-danger);
+  background: var(--wiki-error-background);
+  color: var(--wiki-text);
 }
 
 .wiki-generation-error button {
   padding: 0.4rem 0.8rem;
-  border: 1px solid #72777d;
-  background: #f8f9fa;
+  border: 1px solid var(--wiki-border);
+  background: var(--wiki-background);
+  color: var(--wiki-text);
   cursor: pointer;
 }
 
@@ -549,11 +550,11 @@ input {
   justify-content: center;
   flex-direction: column;
   gap: 0.75rem;
-  border: 1px solid #a2a9b1;
-  background: linear-gradient(110deg, #eaecf0 8%, #f8f9fa 18%, #eaecf0 33%);
+  border: 1px solid var(--wiki-border);
+  background: linear-gradient(110deg, var(--wiki-tab-background) 8%, var(--wiki-background) 18%, var(--wiki-tab-background) 33%);
   background-size: 200% 100%;
   animation: wiki-image-loading 1.5s linear infinite;
-  color: #54595d;
+  color: var(--wiki-muted);
   text-align: center;
 }
 
@@ -570,8 +571,8 @@ input {
 .wiki-loading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 2rem 0;
+  justify-content: flex-start;
+  padding: 4px 0;
   color: var(--wiki-muted);
 }
 
@@ -603,16 +604,18 @@ input {
 }
 
 .wiki-thinking-label {
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
 }
 
 @supports (background-clip: text) {
   .wiki-thinking-label {
-    background: linear-gradient(110deg, var(--wiki-muted) 35%, #7891b0 48%, var(--wiki-text) 55%, var(--wiki-muted) 65%);
+    background: linear-gradient(110deg, var(--wiki-muted) 35%, var(--wiki-text) 50%, var(--wiki-muted) 65%);
     background-size: 250% 100%;
     background-clip: text;
     color: transparent;
-    animation: wiki-thinking-shimmer 2.4s ease-in-out infinite;
+    animation: wiki-thinking-shimmer 2.4s linear infinite;
   }
 }
 
@@ -643,9 +646,9 @@ input {
   width: min(320px, 42%);
   margin: 0.25rem 0 1.25rem 1.5rem;
   padding: 4px;
-  border: 1px solid #a2a9b1;
-  background: #f8f9fa;
-  color: #202122;
+  border: 1px solid var(--wiki-border);
+  background: var(--wiki-background);
+  color: var(--wiki-text);
   box-sizing: border-box;
 }
 
@@ -666,7 +669,7 @@ input {
   width: 100%;
   height: auto;
   margin: 0;
-  border: 1px solid #c8ccd1;
+  border: 1px solid var(--wiki-border-light);
   box-sizing: border-box;
 }
 
@@ -682,8 +685,24 @@ input {
 
 .wiki-image-expand-icon {
   flex: 0 0 auto;
-  color: #54595d;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wiki-muted);
   font-size: 1rem;
+  cursor: zoom-in;
+}
+
+.wiki-image-expand-icon:hover {
+  color: var(--wiki-text);
+  background: var(--wiki-tab-background);
+}
+
+.wiki-image-expand-icon:focus-visible {
+  outline: 2px solid var(--wiki-link);
+  outline-offset: 2px;
 }
 
 /* Full-screen photobox. */
@@ -756,9 +775,36 @@ input {
   padding: 1rem;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 0.75rem;
   background: var(--wiki-tab-background);
   color: var(--wiki-muted);
   text-align: center;
+}
+
+.wiki-image-retry {
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--wiki-border);
+  border-radius: 2px;
+  background: var(--wiki-surface);
+  color: var(--wiki-link);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wiki-image-retry:hover:not(:disabled) {
+  background: var(--wiki-background);
+}
+
+.wiki-image-retry:focus-visible {
+  outline: 2px solid var(--wiki-link);
+  outline-offset: 2px;
+}
+
+.wiki-image-retry:disabled {
+  color: var(--wiki-muted);
+  cursor: wait;
 }
 
 .wiki-image-loading-area {
@@ -768,10 +814,10 @@ input {
   justify-content: center;
   flex-direction: column;
   gap: 0.75rem;
-  background: linear-gradient(110deg, #eaecf0 8%, #f8f9fa 18%, #eaecf0 33%);
+  background: linear-gradient(110deg, var(--wiki-tab-background) 8%, var(--wiki-background) 18%, var(--wiki-tab-background) 33%);
   background-size: 200% 100%;
   animation: wiki-image-loading 1.5s linear infinite;
-  color: #54595d;
+  color: var(--wiki-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,5 +1,6 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
-import { asc, count } from "drizzle-orm";
+import { asc, count, notLike } from "drizzle-orm";
 import { db } from "@/db";
 import { articles } from "@/db/schema";
 import { titleFromSlug, wikiPath } from "@/lib/wiki";
@@ -11,13 +12,17 @@ export default async function Home() {
   const wikis = await db
     .select({ wiki: articles.wiki, articleCount: count() })
     .from(articles)
+    .where(notLike(articles.slug, "stub-%"))
     .groupBy(articles.wiki)
     .orderBy(asc(articles.wiki));
 
   return (
     <main className={styles.main}>
       <header className={styles.intro}>
-        <p className={styles.wordmark}>Fakeipedia</p>
+        <div className={styles.topbar}>
+          <p className={styles.wordmark}>Fakeipedia</p>
+          <ThemeToggle />
+        </div>
         <h1>Choose a world.</h1>
         <p>An encyclopedia of places that never were. Explore the histories,
           people, and peculiarities of a different world.</p>

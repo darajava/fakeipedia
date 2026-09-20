@@ -8,6 +8,12 @@ const stub = {
   content: "A broad world brief. [[Atlantis|Enter this wiki]]",
 };
 
+test("explicit target section identifies the overview even with other links in the brief", () => {
+  const brief = { ...stub, content: "Suggested [[Nacre]]\n\n## Target article\n\n[[Atlantis]]\n\n## Notes\n[[Other]]" };
+  assert.equal(findWorldOverviewBrief([brief], "atlantis", "atlantis"), brief);
+  assert.equal(findWorldOverviewBrief([brief], "atlantis", "nacre"), undefined);
+});
+
 test("overview brief is available when the reader arrives from another article", () => {
   const source = {
     slug: "nacre",

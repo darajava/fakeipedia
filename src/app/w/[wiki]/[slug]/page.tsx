@@ -1,17 +1,25 @@
-import { cache } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { and, eq, inArray } from "drizzle-orm";
 import { WikiImage } from "@/components/wiki-image";
+import { WikiCaption } from "@/components/wiki-caption";
+import { WikipediaNote } from "@/components/wikipedia-note";
+import { rehypeCodeLinks } from "@/lib/rehype-code-links";
+import { extractArticleImages } from "@/lib/article-draft";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
 import { db } from "@/db";
 import { articles } from "@/db/schema";
-import { articleLink, articlePath, imageSource, linkedArticleSlugs, prepareWikiLinks, wikiPath } from "@/lib/wiki";
+import { articleLink, articlePath, graphPath, imageSource, linkedArticleSlugs, prepareWikiLinks, wikiPath } from "@/lib/wiki";
 import { DeleteArticleButton } from "./delete-article-button";
+import { worldOverviewSlug } from "@/lib/world-overview";
 import "./wiki.css";
 
 type WikiPageProps = {
@@ -25,6 +33,15 @@ const getArticle = cache(async (wiki: string, slug: string) => {
     .where(and(eq(articles.wiki, wiki), eq(articles.slug, slug.toLowerCase())))
     .limit(1);
 
+  if (article?.slug.startsWith("stub-")) {
+    const target = worldOverviewSlug(article, wiki);
+    if (!target || target.startsWith("stub-")) notFound();
+    const [main] = await db.select({ slug: articles.slug }).from(articles)
+      .where(and(eq(articles.wiki, wiki), eq(articles.slug, target))).limit(1);
+    // Old startup URLs still work, but the brief itself is never displayed.
+    redirect(main ? articlePath(wiki, target)
+      : `${articlePath(wiki, target)}/generate?title=${encodeURIComponent(article.title)}&source=${encodeURIComponent(article.slug)}`);
+  }
   return article;
 });
 
@@ -67,6 +84,7 @@ export default async function WikiPage({ params }: WikiPageProps) {
   }
 
   const existingSlugs = await existingLinkedSlugs(article.content, wiki);
+  const retryableImages = extractArticleImages(article.content, article.slug);
   const markdown = prepareWikiLinks(article.content.replace(/^#\s+.+?(?:\r?\n)+/, ""), wiki);
 
   return (
@@ -85,12 +103,14 @@ export default async function WikiPage({ params }: WikiPageProps) {
           />
           <button type="submit">Search</button>
         </form>
+        <ThemeToggle />
       </header>
 
       <div className="wiki-layout">
         <aside className="wiki-sidebar">
           <nav aria-label="Wiki navigation">
             <Link href={wikiPath(wiki)}>Main page</Link>
+            <Link href={graphPath(wiki)}>Article graph</Link>
             <Link href="/">All wikis</Link>
             <Link href="/random">Random article</Link>
           </nav>
@@ -113,15 +133,19 @@ export default async function WikiPage({ params }: WikiPageProps) {
             <p className="wiki-subtitle">
               From Fakeipedia, the fake encyclopedia
             </p>
+            <Suspense fallback={null}>
+              <WikipediaNote title={article.title} />
+            </Suspense>
 
             <ReactMarkdown
-              remarkPlugins={[remarkGfm, [remarkSubjectInfobox, { title: article.title, wiki, slug: article.slug }]]}
-              rehypePlugins={[rehypeRaw]}
+              remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title: article.title, wiki, slug: article.slug }]]}
+              rehypePlugins={[rehypeRaw, rehypeKatex, rehypeCodeLinks]}
               components={{
                 a({ href, children, node: _node, className, ...props }) {
                   void _node;
 
                   const link = articleLink(href, wiki);
+                  if (link?.slug.startsWith("stub-")) return <>{children}</>;
                   const isMissing = link?.wiki === wiki && !existingSlugs.has(link.slug);
                   const finalHref = isMissing && link
                     ? `${articlePath(wiki, link.slug)}/generate?title=${encodeURIComponent(link.title)}&source=${encodeURIComponent(article.slug)}${link.hash}`
@@ -148,6 +172,9 @@ export default async function WikiPage({ params }: WikiPageProps) {
                   void _node;
 
                   const resolvedSource = imageSource(src as string, wiki);
+                  const retryableImage = retryableImages.find((image) =>
+                    imageSource(`./images/${image.filename}`, wiki) === resolvedSource,
+                  );
 
                   if (!resolvedSource) {
                     return null;
@@ -158,7 +185,9 @@ export default async function WikiPage({ params }: WikiPageProps) {
                       src={resolvedSource}
                       alt={alt ?? ""}
                       caption={title ?? alt ?? ""}
+                      captionContent={<WikiCaption text={title ?? alt ?? ""} wiki={wiki} slug={article.slug} existingSlugs={existingSlugs} />}
                       priority={className?.includes("wiki-subject-image")}
+                      retryImage={retryableImage ? { wiki, slug: article.slug, filename: retryableImage.filename } : undefined}
                     />
                   );
                 },

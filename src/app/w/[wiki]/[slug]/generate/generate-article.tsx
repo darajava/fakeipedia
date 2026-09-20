@@ -4,10 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { articleLink, articlePath, prepareWikiLinks } from "@/lib/wiki";
 import { WikiImage } from "@/components/wiki-image";
+import { WikiCaption } from "@/components/wiki-caption";
+import { rehypeCodeLinks } from "@/lib/rehype-code-links";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
 import type { ArticleImageMessage } from "@/lib/article-images";
+
+const loadingMessages = [
+  "Generating article",
+  "Organising sections",
+  "Considering history",
+];
 
 type GenerateArticleProps = {
   wiki: string;
@@ -48,6 +58,19 @@ export function GenerateArticle({
   const [markdown, setMarkdown] = useState("");
   const [, setStatus] = useState("");
   const [error, setError] = useState<string>();
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+  const isWaitingForArticle = !markdown && !error;
+  const loadingMessage = loadingMessages[loadingMessageIndex];
+
+  useEffect(() => {
+    if (!isWaitingForArticle) return;
+
+    const interval = window.setInterval(() => {
+      setLoadingMessageIndex((current) => (current + 1) % loadingMessages.length);
+    }, 7000);
+
+    return () => window.clearInterval(interval);
+  }, [isWaitingForArticle]);
 
   const [readyImages, setReadyImages] = useState<Record<string, string>>({});
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -72,11 +95,16 @@ export function GenerateArticle({
    */
   const markdownComponents = useMemo<Components>(
     () => ({
-      a({ href, children, className, ...props }) {
+      a({ href, children, className, node: _node, ...props }) {
+        void _node;
         const link = articleLink(href, wiki);
+        if (link?.slug.startsWith("stub-")) return <>{children}</>;
 
         const isMissing =
           link?.wiki === wiki && !existingSlugs.has(link.slug);
+        const destination = isMissing && link
+          ? `${articlePath(wiki, link.slug)}/generate?title=${encodeURIComponent(link.title)}&source=${encodeURIComponent(slug)}${link.hash}`
+          : link?.href ?? href;
 
         const linkClassName = [
           className,
@@ -86,7 +114,7 @@ export function GenerateArticle({
           .join(" ");
 
         return (
-          <a href={link?.href ?? href} className={linkClassName || undefined} {...props}>
+          <a href={destination} className={linkClassName || undefined} {...props}>
             {children}
           </a>
         );
@@ -96,6 +124,7 @@ export function GenerateArticle({
         const filename = imageFilename(src as string);
 
         const completedUrl = filename ? readyImages[filename] : undefined;
+        const captionContent = <WikiCaption text={title ?? alt ?? ""} wiki={wiki} slug={slug} existingSlugs={existingSlugs} />;
 
         if (filename && !completedUrl && !failedImages[filename]) {
           return (
@@ -106,7 +135,7 @@ export function GenerateArticle({
                 <span>Generating image…</span>
               </span>
 
-              <span className="wiki-image-caption">{title || alt}</span>
+              <span className="wiki-image-caption"><span>{captionContent}</span></span>
             </span>
           );
         }
@@ -120,13 +149,15 @@ export function GenerateArticle({
             src={(completedUrl as string) ?? src}
             alt={alt ?? ""}
             caption={title ?? alt ?? ""}
+            captionContent={captionContent}
             priority={className?.includes("wiki-subject-image")}
             unavailable={Boolean(filename && failedImages[filename])}
+            retryImage={filename ? { wiki, slug, filename } : undefined}
           />
         );
       },
     }),
-    [existingSlugs, readyImages, failedImages, wiki],
+    [existingSlugs, readyImages, failedImages, wiki, slug],
   );
 
   useEffect(() => {
@@ -274,7 +305,8 @@ export function GenerateArticle({
       ) : (
         <article className="wiki-article wiki-generation-preview">
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, [remarkSubjectInfobox, { title, wiki, slug }]]}
+            remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title, wiki, slug }]]}
+            rehypePlugins={[rehypeKatex, rehypeCodeLinks]}
             components={markdownComponents}
           >
             {prepareWikiLinks(markdown, wiki)}
@@ -284,11 +316,9 @@ export function GenerateArticle({
             <div
               className="wiki-loading"
               role="status"
-              aria-label="Thinking"
+              aria-label={loadingMessage}
             >
-              <span className="wiki-loading-spinner" aria-hidden="true" />
-
-              <span className="wiki-thinking-label">Thinking…</span>
+              <span className="wiki-thinking-label">{loadingMessage}</span>
             </div>
           )}
         </article>

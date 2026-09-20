@@ -12,7 +12,6 @@ CREATE TABLE "articles" (
 	"slug" text NOT NULL,
 	"title" text NOT NULL,
 	"content" text NOT NULL,
-	"is_premium" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "articles_slug_unique" UNIQUE("slug")

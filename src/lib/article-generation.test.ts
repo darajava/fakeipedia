@@ -40,6 +40,14 @@ for (const allImagesFail of [false, true]) {
     const articleFile = path.join(directory, "wiki-files/atlantis/harbor.md");
     t.mock.method(globalThis, "fetch", async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes("generativelanguage.googleapis.com")) {
+        const request = JSON.parse(String(init?.body));
+        const prompt = request.messages[0].content as string;
+        assert.ok(prompt.includes("Article URL slug: harbor"));
+        assert.ok(prompt.includes(`<referring_article>\n${source.content}\n</referring_article>`));
+        assert.ok(prompt.includes("MAIN PAGE:"));
+        const catalogue = prompt.split("<existing_articles>\n")[1].split("\n</existing_articles>")[0];
+        assert.equal(catalogue, "- Title: Atlantis\n  Slug: atlantis");
+        assert.ok(!prompt.includes("<world_overview_brief>"));
         const event = { choices: [{ index: 0, delta: { content: markdown }, finish_reason: "stop" }] };
         return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, { headers: { "Content-Type": "text/event-stream" } });
       }

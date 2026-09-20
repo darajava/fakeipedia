@@ -2,7 +2,6 @@ import {
   pgTable,
   integer,
   text,
-  boolean,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
@@ -27,8 +26,6 @@ export const articles = pgTable("articles", {
   title: text("title").notNull(),
 
   content: text("content").notNull(),
-
-  isPremium: boolean("is_premium").notNull().default(false),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
 

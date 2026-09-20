@@ -1,19 +1,60 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 type WikiImageProps = {
   src: string;
   alt: string;
   caption?: string;
+  captionContent?: ReactNode;
   priority?: boolean;
   unavailable?: boolean;
+  retryImage?: { wiki: string; slug: string; filename: string };
 };
 
-export function WikiImage({ src, alt, caption, priority = false, unavailable = false }: WikiImageProps) {
+export function WikiImage({ src, alt, caption, captionContent, priority = false, unavailable = false, retryImage }: WikiImageProps) {
   const [open, setOpen] = useState(false);
   const [failedSource, setFailedSource] = useState<string>();
+  const [replacement, setReplacement] = useState<{ original: string; url: string }>();
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string>();
+  const retryInFlight = useRef(false);
+  const imageSource = replacement?.original === src ? replacement.url : src;
   const captionId = useId();
+  const renderedCaption = captionContent ?? (caption || alt);
+
+  async function retry() {
+    if (retryInFlight.current) return;
+    retryInFlight.current = true;
+    setRetrying(true);
+    setRetryError(undefined);
+    try {
+      let url: string;
+      if (retryImage) {
+        const response = await fetch("/api/articles/images/retry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(retryImage),
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.url !== "string" || !result.url) {
+          throw new Error(result.error || "Could not generate this image. Please try again.");
+        }
+        url = result.url;
+      } else {
+        const refreshed = new URL(src, window.location.href);
+        refreshed.searchParams.set("v", Date.now().toString());
+        url = refreshed.href;
+      }
+      setReplacement({ original: src, url });
+      setFailedSource(undefined);
+    } catch {
+      setRetryError("Image retry failed. Please try again.");
+    } finally {
+      retryInFlight.current = false;
+      setRetrying(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) {
@@ -39,11 +80,17 @@ export function WikiImage({ src, alt, caption, priority = false, unavailable = f
     };
   }, [open]);
 
-  if (unavailable || failedSource === src) {
+  if (retrying || (unavailable && imageSource === src) || failedSource === imageSource) {
     return (
       <span className="wiki-image-frame">
-        <span className="wiki-image-unavailable" role="status">Image unavailable</span>
-        <span className="wiki-image-caption">{caption || alt}</span>
+        <span className="wiki-image-unavailable" aria-busy={retrying}>
+          {retrying && <span className="wiki-loading-spinner" aria-hidden="true" />}
+          <span role="status">{retrying ? "Retrying image…" : retryError || "Image unavailable"}</span>
+          <button type="button" className="wiki-image-retry" onClick={retry} disabled={retrying}>
+            {retrying ? "Retrying…" : retryImage ? "Redo image" : "Retry image"}
+          </button>
+        </span>
+        <span className="wiki-image-caption"><span>{renderedCaption}</span></span>
       </span>
     );
   }
@@ -54,27 +101,27 @@ export function WikiImage({ src, alt, caption, priority = false, unavailable = f
         type="button"
         className="wiki-image-thumbnail"
         onClick={() => setOpen(true)}
-        aria-label={`Open image: ${caption || alt}`}
+        aria-label={`Open image: ${alt}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          src={imageSource}
           alt={alt}
           loading={priority ? "eager" : "lazy"}
           onError={() => {
-            setFailedSource(src);
+            setFailedSource(imageSource);
             setOpen(false);
           }}
         />
 
-        <span className="wiki-image-caption">
-          <span>{caption || alt}</span>
-
-          <span className="wiki-image-expand-icon" aria-hidden="true">
-            ⛶
-          </span>
-        </span>
       </button>
+
+      <span className="wiki-image-caption">
+        <span>{renderedCaption}</span>
+        <button type="button" className="wiki-image-expand-icon" onClick={() => setOpen(true)} aria-label="Expand image">
+          <span aria-hidden="true">⛶</span>
+        </button>
+      </span>
 
       {open && (
         <span
@@ -99,11 +146,11 @@ export function WikiImage({ src, alt, caption, priority = false, unavailable = f
             onClick={(event) => event.stopPropagation()}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={alt} />
+            <img src={imageSource} alt={alt} />
 
             {caption && (
               <span id={captionId} className="wiki-photobox-caption">
-                {caption}
+                {renderedCaption}
               </span>
             )}
           </span>

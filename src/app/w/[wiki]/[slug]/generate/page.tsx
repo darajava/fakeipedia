@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
@@ -67,6 +68,7 @@ export default async function GeneratePage({
           />
           <button type="submit">Search</button>
         </form>
+        <ThemeToggle />
       </header>
 
       <div className="wiki-layout">

@@ -22,14 +22,14 @@ async function fixture(files: Record<string, string>, run: (directory: string) =
 test("imports the same article slug independently in two worlds, including nested files", async () => {
   await fixture({
     "zorg/history.md": "# History of Zorg\n\nThe canals.",
-    "rome/eras/history.md": "---\ntitle: Roman history\nslug: history\nis_premium: true\n---\n\nThe empire.",
+    "rome/eras/history.md": "---\ntitle: Roman history\nslug: history\n---\n\nThe empire.",
     "zorg/images/map.png": "image placeholder",
   }, async (directory) => {
     const articles = await readWikiArticles(directory);
     assert.equal(articles.length, 2);
-    assert.deepEqual(articles.map(({ wiki, slug, title, isPremium }) => ({ wiki, slug, title, isPremium })), [
-      { wiki: "rome", slug: "history", title: "Roman history", isPremium: true },
-      { wiki: "zorg", slug: "history", title: "History of Zorg", isPremium: false },
+    assert.deepEqual(articles.map(({ wiki, slug, title }) => ({ wiki, slug, title })), [
+      { wiki: "rome", slug: "history", title: "Roman history" },
+      { wiki: "zorg", slug: "history", title: "History of Zorg" },
     ]);
   });
 });

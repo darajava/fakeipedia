@@ -131,13 +131,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "is_premium": {
-          "name": "is_premium",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",

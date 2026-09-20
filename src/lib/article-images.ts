@@ -49,9 +49,9 @@ IMAGE REQUIRED:
 export async function generateArticleImages(
   { wiki, markdown, slug, title }: { wiki: string; markdown: string; slug: string; title: string },
   send: (message: ArticleImageMessage) => void,
-  { client, wikiDirectory = path.join(process.cwd(), "wiki-files") }: { client?: OpenAI; wikiDirectory?: string } = {},
+  { client, wikiDirectory = path.join(process.cwd(), "wiki-files"), filename }: { client?: OpenAI; wikiDirectory?: string; filename?: string } = {},
 ) {
-  const images = extractArticleImages(markdown, slug);
+  const images = extractArticleImages(markdown, slug).filter((image) => !filename || image.filename === filename);
   if (images.length === 0) return;
 
   const archiveDirectory = path.join(wikiDirectory, wiki, "images");

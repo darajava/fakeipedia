@@ -16,6 +16,7 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "gray-matter": "^4.0.3",
+    "katex": "^0.16.47",
     "next": "16.3.4",
     "openai": "^6.49.0",
     "pg": "^8.23.0",
@@ -23,8 +24,13 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/node": "^20",

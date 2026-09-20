@@ -5,12 +5,17 @@
 }
 
 .intro {
-  max-width: 640px;
   margin-bottom: 48px;
 }
 
-.wordmark {
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 36px;
+}
+
+.wordmark {
   font: 28px Georgia, "Times New Roman", serif;
 }
 
@@ -20,6 +25,7 @@
 }
 
 .intro > p:last-child {
+  max-width: 640px;
   font-size: 18px;
   line-height: 1.7;
   opacity: 0.75;

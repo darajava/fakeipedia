@@ -18,6 +18,20 @@ Use lowercase, hyphenated wiki directory names. The first directory determines t
 
 Articles use `/w/WIKI/ARTICLE`, for example `/w/zorg/helion-system`. `/` lists imported wikis, and `/w/zorg` lists Zorg's articles. Existing `/wiki/ARTICLE` URLs redirect to Zorg.
 
+## Article graph
+
+Open **Article graph** from an article's navigation, or **Explore the article graph** from the wiki's article list. The graph lives at `/w/WIKI/explore/graph`, so articles named `graph` or `explore` keep their URLs.
+
+Drag an article node with gentle spring resistance; a quick release carries its momentum, which fades with friction. Connected articles subtly follow the movement. This interaction uses a bounded local spring system (the dragged article and up to 48 actual neighbours), keeping large wikis responsive. Holding still before release stops the fling, and reduced-motion preferences disable inertia. Drag the background to pan, scroll or pinch to zoom, and click a node to read its article. Search can find and focus any article, including isolated articles. Keyboard controls are arrow keys to pan, `+`/`-` to zoom, `Home` to fit the graph, and `Enter` to open the focused article. The searchable article links also work without WebGL 2.
+
+Every saved article is a node. Connections come from rendered links inside the current wiki, including Markdown reference links, HTML anchors, and clickable Markdown links in preformatted tables and diagrams. Inline code, literal HTML inside code blocks, image sources, external links and links to other wikis do not create connections. Repeated links from one article to the same target count once. Missing targets appear only as short red lines extending from their source, and self-links appear as loops.
+
+For large wikis, a read-only database cursor streams compact records in batches of 128. A consistent snapshot avoids mixing article versions during loading. A bounded server cache retains up to four graphs within an estimated 128 MiB total budget; snapshots may be up to one minute old. Refreshing an expired snapshot checks database row revisions and reads/parses only new or changed article bodies. A cold load still needs to read and parse the wiki's content; the cache is per server process and is lost on restart.
+
+The browser parses the stream, builds typed adjacency buffers, runs bounded spatial forces, searches and handles picking in a Web Worker. WebGL 2 batches nodes, links, missing-link stubs and self-loops into four draw calls, with positions interpolated on the GPU. Camera movement updates uniforms rather than rebuilding all edges. Dense overview views sample actual connections to limit overlapping line drawing; all article nodes remain visible, an on-screen hint identifies the simplified view, and zooming in restores more link detail. Layout work yields between small batches, stops after settling, and pauses in hidden tabs. Reduced-motion preferences disable animated layout transitions. The article list is paginated at 100 entries to avoid rendering a 100,000-item list on the way to the graph.
+
+`npm test` includes a synthetic 100,000-article / 1,000,000-link graph check, link-extraction cases, and database-stream/cache/cancellation tests. The synthetic records stay in test memory and are never inserted into the wiki database. Device frame rates and a cold database load are separate from these unit tests.
+
 ## Run locally
 
 Configure `DATABASE_URL` in `.env`, then run:

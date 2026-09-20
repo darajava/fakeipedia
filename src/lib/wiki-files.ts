@@ -63,7 +63,6 @@ export async function readWikiArticles(directory: string) {
     const slug = slugify(String(data.slug ?? filename));
     const heading = content.match(/^#\s+(.+?)\s*$/m)?.[1].replace(/\s+#+\s*$/, "").trim();
     const title = String(data.title ?? heading ?? titleFromSlug(slug)).trim();
-    const premium = data.is_premium ?? data.isPremium;
 
     if (!slug || !title || !content.trim()) {
       throw new Error(`Article needs a slug, title and content: ${relativePath}`);
@@ -77,7 +76,6 @@ export async function readWikiArticles(directory: string) {
       slug,
       title,
       content: content.trim() + "\n",
-      isPremium: premium === true || premium === "true",
     };
   }));
 }

@@ -6,20 +6,32 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { WikiImage } from "../components/wiki-image";
+import { WikiCaption } from "../components/wiki-caption";
 import { remarkSubjectInfobox } from "./remark-subject-infobox";
 import { imageSource, prepareWikiLinks } from "./wiki";
 
-function render(markdown: string, savedPage = true) {
+function render(markdown: string, savedPage = true, imageState: "ready" | "loading" | "unavailable" = "ready") {
   return renderToStaticMarkup(createElement(ReactMarkdown, {
     remarkPlugins: [remarkGfm, [remarkSubjectInfobox, { title: "Atlantis", wiki: "atlantis", slug: "atlantis" }]],
     rehypePlugins: savedPage ? [rehypeRaw] : [],
     components: {
-      img: ({ src, alt, title, className }) => createElement(WikiImage, {
-        src: imageSource(String(src), "atlantis")!,
-        alt: alt ?? "",
-        caption: title ?? alt,
-        priority: className?.includes("wiki-subject-image"),
-      }),
+      img: ({ src, alt, title, className }) => {
+        const captionContent = createElement(WikiCaption, {
+          text: title ?? alt ?? "", wiki: "atlantis", slug: "atlantis", existingSlugs: new Set(["new-london"]),
+        });
+        if (imageState === "loading") {
+          return createElement("span", { className: "wiki-image-frame wiki-image-generating" },
+            "Generating image…", createElement("span", { className: "wiki-image-caption" }, captionContent));
+        }
+        return createElement(WikiImage, {
+          src: imageSource(String(src), "atlantis")!,
+          alt: alt ?? "",
+          caption: title ?? alt,
+          captionContent,
+          unavailable: imageState === "unavailable",
+          priority: className?.includes("wiki-subject-image"),
+        });
+      },
     },
   }, prepareWikiLinks(markdown, "atlantis")));
 }
@@ -71,4 +83,29 @@ test("image promotion preserves adjacent text and standard tables", () => {
   assert.match(html, /<p>Before  after\.<\/p>/);
   assert.match(html, /<table>/);
   assert.doesNotMatch(render("An older article without images."), /<aside/);
+});
+
+for (const savedPage of [true, false]) {
+  for (const imageState of ["ready", "loading", "unavailable"] as const) {
+    test(`infobox caption links work in the ${savedPage ? "saved article" : "preview"} with a ${imageState} image`, () => {
+      const html = render('![Monument](./images/atlantis_main.png "The Monument in [[New London]], governed by [[Grand Matriarchate]].")', savedPage, imageState);
+      assert.match(html, /<a href="\/w\/atlantis\/new-london">New London<\/a>/);
+      assert.match(html, /href="\/w\/atlantis\/grand-matriarchate\/generate\?title=Grand%20Matriarchate&amp;source=atlantis" class="wiki-link-missing">Grand Matriarchate<\/a>/);
+      assert.doesNotMatch(html, /\[New London\]|\[Grand Matriarchate\]/);
+      for (const button of html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)) {
+        assert.doesNotMatch(button[1], /<a\b/, "Caption links must be outside the image-opening button");
+      }
+    });
+  }
+}
+
+test("caption markup keeps inline formatting without enabling unsafe links or nested images", () => {
+  const html = renderToStaticMarkup(createElement(WikiCaption, {
+    text: '**Monument** in [New London](/w/atlantis/new-london?title=New%20London), [external](https://example.com), [unsafe](javascript:alert), ![nested](https://example.com/image.png)',
+    wiki: "atlantis", slug: "atlantis", existingSlugs: new Set(["new-london"]),
+  }));
+  assert.match(html, /<strong>Monument<\/strong>/);
+  assert.match(html, /href="\/w\/atlantis\/new-london"/);
+  assert.match(html, /href="https:\/\/example.com"/);
+  assert.doesNotMatch(html, /javascript:|<img|<p>/);
 });
