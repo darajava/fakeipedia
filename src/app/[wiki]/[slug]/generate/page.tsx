@@ -1,12 +1,14 @@
+import { WikiArticleContent } from "@/components/wiki-article-content";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { articlePath, titleFromSlug, wikiPath } from "@/lib/wiki";
 import { readWikiDefinition } from "@/lib/wiki-files";
 
-import { GenerateArticle } from "./generate-article";
+import { PrepareArticle } from "./prepare-article";
+import { redirect } from "next/navigation";
 import "../wiki.css";
 
 import { db } from "@/db";
@@ -32,7 +34,7 @@ export async function generateMetadata({
   const title = query.title?.trim() || titleFromSlug(slug);
 
   return {
-    title: `Generating ${title} — Fakeipedia`,
+    title: `Shape ${title} — Fakeipedia`,
   };
 }
 
@@ -45,17 +47,20 @@ export default async function GeneratePage({
 
   const title = query.title?.trim() || titleFromSlug(slug);
 
-  const [existingArticles, { mainPageSlug }] = await Promise.all([
+  const [existingArticles, { mainPageSlug }, [sourceArticle]] = await Promise.all([
     db
       .select({
         slug: articles.slug,
+        title: articles.title,
       })
       .from(articles)
       .where(eq(articles.wiki, wiki)),
     readWikiDefinition(path.join(process.cwd(), "wiki-files"), wiki),
+    db.select().from(articles).where(and(eq(articles.wiki, wiki), eq(articles.slug, sourceSlug))).limit(1),
   ]);
 
   const existingArticleSlugs = existingArticles.map((article) => article.slug);
+  if (existingArticleSlugs.includes(slug)) redirect(articlePath(wiki, slug));
 
   return (
     <div className="wiki-shell">
@@ -88,19 +93,26 @@ export default async function GeneratePage({
         <main className="wiki-main">
           <nav className="wiki-tabs" aria-label="Article actions">
             <span>Article</span>
-            <span>Discussion</span>
-            <span>Generating</span>
+            <Link href={`${articlePath(wiki, slug)}/discussion`}>Discussion</Link>
+            <span>Creation</span>
           </nav>
 
-          <article className="wiki-article">
-            <GenerateArticle
+          <div className="wiki-article">
+            <PrepareArticle
+              key={`${wiki}/${slug}/${sourceSlug}`}
               wiki={wiki}
               slug={slug}
               title={title}
               sourceSlug={sourceSlug}
               existingArticleSlugs={existingArticleSlugs}
-            />
-          </article>
+            >
+              {sourceArticle && !sourceArticle.slug.startsWith("stub-") && (
+                <article className="wiki-lore-source">
+                  <WikiArticleContent wiki={wiki} article={sourceArticle} existingSlugs={new Set(existingArticleSlugs)} />
+                </article>
+              )}
+            </PrepareArticle>
+          </div>
         </main>
       </div>
     </div>

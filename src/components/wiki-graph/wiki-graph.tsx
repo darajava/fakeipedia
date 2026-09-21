@@ -376,11 +376,11 @@ export function WikiGraph({ wiki }: { wiki: string }) {
       </div>
       <div className="graph-body">
         <div className="graph-stage">
-          <canvas ref={canvasRef} tabIndex={0} aria-label="Interactive article graph. Blue nodes are saved articles; red nodes are unwritten articles. Drag a node to move it, drag the background to pan, scroll or pinch to zoom. Click a blue node to read or a red node to generate its article. Keyboard: arrow keys to pan, plus and minus to zoom, Home to fit all, Enter to open the selected node. Search the article list to focus or open a page." />
+          <canvas ref={canvasRef} tabIndex={0} aria-label="Interactive article graph. Blue nodes are saved articles; red nodes are unwritten articles. Drag a node to move it, drag the background to pan, scroll or pinch to zoom. Click a blue node to read or a red node to help shape its article. Keyboard: arrow keys to pan, plus and minus to zoom, Home to fit all, Enter to open the selected node. Search the article list to focus or open a page." />
           <canvas ref={labelsRef} className="graph-labels" aria-hidden="true" />
           {status && !error && <p className={`graph-status${counts?.nodes ? " graph-status-small" : ""}`} role="status">{paused && counts ? "Layout paused" : status}</p>}
           {error && <div className="graph-error" role="alert"><p>{error}</p><button onClick={() => { setError(""); setCounts(null); setStatus("Loading articles…"); setPaused(false); setSettled(false); setSimplified(false); setMatches([]); setRetry(retry + 1); }}>Reload graph</button></div>}
-          <p className="graph-hint">{simplified ? "All nodes shown · Zoom in for more link detail" : "Drag dots to move · Click blue to read, red to generate"}</p>
+          <p className="graph-hint">{simplified ? "All nodes shown · Zoom in for more link detail" : "Drag dots to move · Click blue to read, red to shape"}</p>
         </div>
         <aside className="graph-search" aria-label="Find an article">
           <label htmlFor="graph-search">Find an article</label>
@@ -398,7 +398,7 @@ export function WikiGraph({ wiki }: { wiki: string }) {
           </ul>
           {query && counts && !matches.length && <p role="status">No matching articles.</p>}
           <div className="graph-legend"><p><i className="graph-node-key" /> Saved article</p><p><i className="graph-red-key" /> Unwritten article</p><p><i className="graph-link-key" /> Article link</p></div>
-          <p className="graph-explanation">Blue dots are saved articles. Red dots are unwritten articles, shared by all pages that link to them. Click a red dot to generate its article.</p>
+          <p className="graph-explanation">Blue dots are saved articles. Red dots are unwritten articles, shared by all pages that link to them. Click a red dot to help shape its article.</p>
         </aside>
       </div>
     </section>

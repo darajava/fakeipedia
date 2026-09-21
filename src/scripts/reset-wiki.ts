@@ -12,7 +12,7 @@ async function main() {
   const directory = path.join(process.cwd(), "wiki-files");
   if (args.includes("--dry-run")) {
     const plan = await planWikiReset(directory);
-    console.log("Would empty articles, article_revisions and users, and reset their IDs.");
+    console.log("Would empty articles, article_revisions, article_question_sets, lore_contributions and users, and reset their IDs.");
     console.log("Database schema and migration history would remain intact.");
     for (const file of plan.files) console.log(`Would delete ${path.relative(process.cwd(), file)}`);
     console.log(`Would delete ${plan.files.length} file(s) and preserve ${plan.stubs.length} stub(s).`);
@@ -28,9 +28,9 @@ async function main() {
     const client = await pool.connect();
     try {
       const result = await resetWiki(directory, async () => {
-        await client.query("TRUNCATE TABLE article_revisions, articles, users RESTART IDENTITY");
+        await client.query("TRUNCATE TABLE lore_contributions, article_question_sets, article_revisions, articles, users RESTART IDENTITY");
       });
-      console.log("Emptied articles, article_revisions and users; reset their IDs.");
+      console.log("Emptied articles, article_revisions, article_question_sets, lore_contributions and users; reset their IDs.");
       console.log(`Deleted ${result.files.length} file(s) and preserved ${result.stubs.length} stub(s).`);
       console.log("Run npm run import:wiki to load the preserved stubs into the empty database.");
     } finally {

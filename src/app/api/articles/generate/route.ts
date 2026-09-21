@@ -1,10 +1,15 @@
 import path from "node:path";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile, unlink } from "node:fs/promises";
 
 import { and, asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { articles } from "@/db/schema";
+import { articles, loreContributions } from "@/db/schema";
+import { acquireArticleLock, ArticleBusyError } from "@/lib/article-lock";
+import { ensureArticleQuestions } from "@/lib/article-question-store";
+import { questionTargets } from "@/lib/article-questions";
+import { LoreInputError, readLoreInput, lorePrompt } from "@/lib/lore-input";
+import { saveLoreContribution } from "@/lib/lore-contributions";
 import { generateArticleDraft } from "@/lib/article-draft";
 import { buildArticleContext } from "@/lib/article-context";
 import { generateArticleImages } from "@/lib/article-images";
@@ -19,6 +24,10 @@ type GenerateRequest = {
   slug?: unknown;
   title?: unknown;
   sourceSlug?: unknown;
+  answer?: unknown;
+  fallbackQuestion?: unknown;
+  questionSetId?: unknown;
+  requestId?: unknown;
 };
 
 async function saveArticle(
@@ -26,6 +35,7 @@ async function saveArticle(
   slug: string,
   title: string,
   content: string,
+  contributionId?: number,
 ) {
   const wikiDirectory = path.join(process.cwd(), "wiki-files", wiki);
 
@@ -53,29 +63,80 @@ async function saveArticle(
   // Write and rename so readers never see a partial Markdown file.
   await writeFile(temporaryPath, fileContent, "utf8");
 
-  await rename(temporaryPath, finalPath);
-
-  await db
-    .insert(articles)
-    .values({
-      wiki,
-      slug,
-      title,
-      content,
-    })
-    .onConflictDoUpdate({
-      target: [articles.wiki, articles.slug],
-      set: {
-        title,
-        content,
-        updatedAt: new Date(),
-      },
+  let renamed = false;
+  try {
+    return await db.transaction(async (tx) => {
+      // The generation lock prevents competing writers; never upsert an article.
+      const [saved] = await tx
+        .insert(articles)
+        .values({ wiki, slug, title, content })
+        .returning();
+      await rename(temporaryPath, finalPath);
+      renamed = true;
+      if (contributionId)
+        await tx
+          .update(loreContributions)
+          .set({ status: "succeeded", articleId: saved.id })
+          .where(eq(loreContributions.id, contributionId));
+      return saved;
     });
+  } catch (error) {
+    await unlink(renamed ? finalPath : temporaryPath).catch(() => {});
+    throw error;
+  }
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as GenerateRequest;
+  let release: (() => Promise<void>) | undefined;
+  try {
+    const body = (await request
+      .json()
+      .catch(() => null)) as GenerateRequest | null;
+    if (
+      !body ||
+      typeof body.wiki !== "string" ||
+      typeof body.slug !== "string" ||
+      !validWikiSlug(body.wiki.toLowerCase().trim()) ||
+      !validSlug(body.slug.toLowerCase().trim())
+    ) {
+      return Response.json(
+        { error: "A valid wiki and article slug are required." },
+        { status: 400 },
+      );
+    }
+    readLoreInput(body);
+    release = await acquireArticleLock(
+      `generation:${body.wiki.toLowerCase().trim()}:${body.slug.toLowerCase().trim()}`,
+    );
+    const response = await generate(body, release);
+    if (!response.headers.get("Content-Type")?.includes("ndjson"))
+      await release();
+    return response;
+  } catch (error) {
+    await release?.();
+    if (error instanceof ArticleBusyError)
+      return Response.json(
+        {
+          busy: true,
+          error:
+            "Someone is already generating this article. Please try again shortly.",
+        },
+        { status: 409 },
+      );
+    if (error instanceof LoreInputError)
+      return Response.json({ error: error.message }, { status: 400 });
+    console.error("Could not start article generation:", error);
+    return Response.json(
+      {
+        error:
+          "Could not save your contribution or start generation. Your answer is still here; please try again.",
+      },
+      { status: 500 },
+    );
+  }
+}
 
+async function generate(body: GenerateRequest, release: () => Promise<void>) {
   if (
     typeof body.wiki !== "string" ||
     typeof body.slug !== "string" ||
@@ -110,6 +171,7 @@ export async function POST(request: Request) {
 
   let sourceArticle:
     | {
+        id: number;
         title: string;
         slug: string;
         content: string;
@@ -122,6 +184,7 @@ export async function POST(request: Request) {
     if (validSlug(sourceSlug)) {
       const [result] = await db
         .select({
+          id: articles.id,
           title: articles.title,
           slug: articles.slug,
           content: articles.content,
@@ -142,6 +205,15 @@ export async function POST(request: Request) {
       {
         status: 400,
       },
+    );
+  }
+
+  if (
+    !questionTargets(sourceArticle, wiki).some((target) => target.slug === slug)
+  ) {
+    return Response.json(
+      { error: "The source article no longer links to this page." },
+      { status: 400 },
     );
   }
 
@@ -298,6 +370,7 @@ or newly introduced lore. Missing articles are valid link targets.
 - Link the first useful occurrence of a subject; repeat only where it helps
   navigation in a later section. Do not link the article to itself. The
   3–6 link limit applies only to "See also", not to the article body.
+- Use "Main article: <Link>" in a section heading or at the end of a section to point to a more detailed article on a subject only if it makes sense to.
 
 Before returning the article, review the prose, section headings, bold labels
 and italic names for missed article subjects, and remove links that merely
@@ -382,28 +455,64 @@ Image rules:
 
 `.trim();
 
+  const contribution = await saveLoreContribution(
+    wiki,
+    slug,
+    sourceArticle,
+    readLoreInput(body),
+  );
+  const generationPrompt = [
+    prompt,
+    lorePrompt(
+      contribution
+        ? { question: contribution.question, answer: contribution.answer }
+        : undefined,
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const encoder = new TextEncoder();
+  let disconnected = false;
 
   const responseStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (message: object) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(message)}\n`));
+        if (disconnected) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(message)}\n`));
+        } catch {
+          disconnected = true;
+        }
       };
 
+      let articleSaved = false;
       try {
         const markdown = await generateArticleDraft(
-          { prompt, slug, isWorldOverview },
+          { prompt: generationPrompt, slug, isWorldOverview },
           send,
         );
 
         // Preserve the finished article before starting optional illustrations.
-        await saveArticle(wiki, slug, title, markdown);
+        const saved = await saveArticle(
+          wiki,
+          slug,
+          title,
+          markdown,
+          contribution?.id,
+        );
+        articleSaved = true;
 
         send({
           type: "text-done",
+          markdown,
         });
 
-        await generateArticleImages({ wiki, markdown, slug, title }, send);
+        await Promise.allSettled([
+          generateArticleImages({ wiki, markdown, slug, title }, send),
+          ensureArticleQuestions(saved).catch((error) => {
+            console.error("Optional article questions failed:", error);
+          }),
+        ]);
 
         send({
           type: "done",
@@ -411,6 +520,14 @@ Image rules:
         });
       } catch (error) {
         console.error("Article generation failed:", error);
+        if (contribution && !articleSaved)
+          await db
+            .update(loreContributions)
+            .set({ status: "failed" })
+            .where(eq(loreContributions.id, contribution.id))
+            .catch((failure) =>
+              console.error("Could not mark contribution failed:", failure),
+            );
 
         send({
           type: "error",
@@ -420,8 +537,12 @@ Image rules:
               : "Article generation failed.",
         });
       } finally {
-        controller.close();
+        await release();
+        if (!disconnected) controller.close();
       }
+    },
+    cancel() {
+      disconnected = true;
     },
   });
 

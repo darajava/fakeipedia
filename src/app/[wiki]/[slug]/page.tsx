@@ -1,25 +1,16 @@
+import { WikiArticleContent } from "@/components/wiki-article-content";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { cache, Suspense } from "react";
+import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import path from "node:path";
 import { notFound, redirect } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import { and, eq, inArray } from "drizzle-orm";
-import { WikiImage } from "@/components/wiki-image";
-import { WikiCaption } from "@/components/wiki-caption";
-import { WikipediaNote } from "@/components/wikipedia-note";
-import { rehypeCodeLinks } from "@/lib/rehype-code-links";
-import { extractArticleImages } from "@/lib/article-draft";
-import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
 import { db } from "@/db";
 import { articles } from "@/db/schema";
-import { articleLink, articlePath, graphPath, imageSource, linkedArticleSlugs, prepareWikiLinks, wikiPath } from "@/lib/wiki";
+import { articlePath, graphPath, wikiPath } from "@/lib/wiki";
 import { DeleteArticleButton } from "./delete-article-button";
+import { graphArticleLinks } from "@/lib/wiki-graph";
 import { worldOverviewSlug } from "@/lib/world-overview";
 import { readWikiDefinition } from "@/lib/wiki-files";
 import "./wiki.css";
@@ -48,7 +39,7 @@ const getArticle = cache(async (wiki: string, slug: string) => {
 });
 
 async function existingLinkedSlugs(markdown: string, wiki: string): Promise<Set<string>> {
-  const linkedSlugs = linkedArticleSlugs(markdown, wiki);
+  const linkedSlugs = graphArticleLinks(markdown, wiki);
 
   if (linkedSlugs.length === 0) {
     return new Set();
@@ -89,8 +80,6 @@ export default async function WikiPage({ params }: WikiPageProps) {
     existingLinkedSlugs(article.content, wiki),
     readWikiDefinition(path.join(process.cwd(), "wiki-files"), wiki),
   ]);
-  const retryableImages = extractArticleImages(article.content, article.slug);
-  const markdown = prepareWikiLinks(article.content.replace(/^#\s+.+?(?:\r?\n)+/, ""), wiki);
 
   return (
     <div className="wiki-shell">
@@ -124,9 +113,8 @@ export default async function WikiPage({ params }: WikiPageProps) {
         <main className="wiki-main">
           <nav className="wiki-tabs" aria-label="Article actions">
             <span>Article</span>
-            <span>Discussion</span>
+            <Link href={`${articlePath(wiki, article.slug)}/discussion`}>Discussion</Link>
             <span>Read</span>
-            <Link href={`${articlePath(wiki, article.slug)}/edit`}>Edit</Link>
             <Link href={`${articlePath(wiki, article.slug)}/history`}>View history</Link>
             {process.env.NODE_ENV === "development" && (
               <DeleteArticleButton wiki={wiki} slug={article.slug} />
@@ -134,72 +122,7 @@ export default async function WikiPage({ params }: WikiPageProps) {
           </nav>
 
           <article className="wiki-article">
-            <h1>{article.title}</h1>
-            <p className="wiki-subtitle">
-              From Fakeipedia, the fake encyclopedia
-            </p>
-            <Suspense fallback={null}>
-              <WikipediaNote title={article.title} />
-            </Suspense>
-
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title: article.title, wiki, slug: article.slug }]]}
-              rehypePlugins={[rehypeRaw, rehypeKatex, rehypeCodeLinks]}
-              components={{
-                a({ href, children, node: _node, className, ...props }) {
-                  void _node;
-
-                  const link = articleLink(href, wiki);
-                  if (link?.slug.startsWith("stub-")) return <>{children}</>;
-                  const isMissing = link?.wiki === wiki && !existingSlugs.has(link.slug);
-                  const finalHref = isMissing && link
-                    ? `${articlePath(wiki, link.slug)}/generate?title=${encodeURIComponent(link.title)}&source=${encodeURIComponent(article.slug)}${link.hash}`
-                    : link?.href ?? href;
-
-                  const linkClassName = [
-                    className,
-                    isMissing ? "wiki-link-missing" : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-
-                  return (
-                    <a
-                      href={finalHref}
-                      className={linkClassName || undefined}
-                      {...props}
-                    >
-                      {children}
-                    </a>
-                  );
-                },
-                img({ src, alt, title, className, node: _node }) {
-                  void _node;
-
-                  const resolvedSource = imageSource(src as string, wiki);
-                  const retryableImage = retryableImages.find((image) =>
-                    imageSource(`./images/${image.filename}`, wiki) === resolvedSource,
-                  );
-
-                  if (!resolvedSource) {
-                    return null;
-                  }
-
-                  return (
-                    <WikiImage
-                      src={resolvedSource}
-                      alt={alt ?? ""}
-                      caption={title ?? alt ?? ""}
-                      captionContent={<WikiCaption text={title ?? alt ?? ""} wiki={wiki} slug={article.slug} existingSlugs={existingSlugs} />}
-                      priority={className?.includes("wiki-subject-image")}
-                      retryImage={retryableImage ? { wiki, slug: article.slug, filename: retryableImage.filename, prompt: retryableImage.description } : undefined}
-                    />
-                  );
-                },
-              }}
-            >
-              {markdown}
-            </ReactMarkdown>
+            <WikiArticleContent wiki={wiki} article={article} existingSlugs={existingSlugs} />
           </article>
         </main>
       </div>

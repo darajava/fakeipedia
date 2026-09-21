@@ -4,14 +4,14 @@ import { articleDraftIssues, extractArticleImages, generateArticleDraft } from "
 
 const image = (index: number) => `![An illustration of district ${index}](./images/atlantis_${index}.png "District ${index}.")`;
 const ordinary = `# Atlantis\n\n${image(0)}\n\nAn underwater civilisation.`;
-const featured = `# Atlantis\n\n${Array.from({ length: 5 }, (_, index) => image(index)).join("\n\n")}\n\n` +
+const featured = `# Atlantis\n\n${Array.from({ length: 4 }, (_, index) => image(index)).join("\n\n")}\n\n` +
   Array.from({ length: 8 }, (_, index) => `## Topic ${index}\n\n${"Substantial article prose. ".repeat(80)}`).join("\n\n");
 
-test("featured requirements check prose, broad sections and five distinct images", () => {
+test("featured requirements check prose, broad sections and four distinct images", () => {
   assert.deepEqual(articleDraftIssues(featured, "atlantis", true), []);
   const issues = articleDraftIssues(ordinary, "atlantis", true);
   assert.equal(issues.length, 3);
-  assert.match(issues.join(" "), /exactly 5/);
+  assert.match(issues.join(" "), /exactly 4/);
   assert.match(issues.join(" "), /2,000 words/);
   assert.match(issues.join(" "), /8–10/);
 });

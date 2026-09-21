@@ -15,6 +15,13 @@
       "when": 1789773866914,
       "tag": "0001_wiki_namespaces",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790026437863,
+      "tag": "0002_lore_contributions",
+      "breakpoints": true
     }
   ]
 }

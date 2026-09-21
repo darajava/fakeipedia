@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-function createGeminiClient() {
+export function createGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new Error("Set GEMINI_API_KEY to generate articles.");
 

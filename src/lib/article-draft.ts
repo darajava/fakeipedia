@@ -1,4 +1,5 @@
 import { generateArticleText } from "./article-text";
+import { removeAsciiTables } from "./article-cleanup";
 
 export type ArticleImage = { filename: string; description: string };
 type DraftOptions = { prompt: string; slug: string; isWorldOverview: boolean };
@@ -82,6 +83,7 @@ export async function generateArticleDraft(
     .replace(/^```(?:markdown|md)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
+  markdown = removeAsciiTables(markdown).trim();
   if (!markdown) throw new Error("Gemini returned an empty article.");
   const issues = articleDraftIssues(markdown, slug, isWorldOverview);
   if (issues.length)

@@ -1,0 +1,35 @@
+.wiki-search-results {
+  max-width: 1000px;
+  margin: 32px auto;
+  border-top: 1px solid var(--wiki-border);
+}
+
+.wiki-search-result-list {
+  padding: 0;
+  list-style: none;
+}
+
+.wiki-search-result-list li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--wiki-border-light);
+}
+
+.wiki-search-result-list h2 {
+  margin: 0;
+  border: 0;
+  font-size: 20px;
+}
+
+.wiki-search-result-list p {
+  margin: 4px 0 0;
+  color: var(--wiki-muted);
+  font-size: 13px;
+}
+
+.wiki-search-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin-top: 24px;
+}

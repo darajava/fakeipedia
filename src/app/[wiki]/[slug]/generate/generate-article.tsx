@@ -10,6 +10,7 @@ import rehypeRaw from "rehype-raw";
 import { articleLink, articlePath, prepareWikiLinks } from "@/lib/wiki";
 import { WikiImage } from "@/components/wiki-image";
 import { WikiCaption } from "@/components/wiki-caption";
+import { WikiTable } from "@/components/wiki-table";
 import { rehypeCodeLinks } from "@/lib/rehype-code-links";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
 import type { ArticleImageMessage } from "@/lib/article-images";
@@ -20,11 +21,16 @@ const loadingMessages = [
   "Considering history",
 ];
 
-type GenerateArticleProps = {
+export type GenerateArticleProps = {
   wiki: string;
   slug: string;
   title: string;
   sourceSlug: string;
+  answer?: string;
+  questionSetId?: number;
+  fallbackQuestion?: boolean;
+  requestId?: string;
+  onRetry?: () => void;
   existingArticleSlugs: string[];
 };
 
@@ -36,6 +42,7 @@ type StreamMessage =
     }
   | {
       type: "text-done";
+      markdown: string;
     }
   | {
       type: "done";
@@ -52,6 +59,7 @@ export function GenerateArticle({
   title,
   sourceSlug,
   existingArticleSlugs,
+  answer, questionSetId, fallbackQuestion, requestId, onRetry,
 }: GenerateArticleProps) {
   const router = useRouter();
   const started = useRef(false);
@@ -96,6 +104,7 @@ export function GenerateArticle({
    */
   const markdownComponents = useMemo<Components>(
     () => ({
+      table: WikiTable,
       a({ href, children, className, node: _node, ...props }) {
         void _node;
         const link = articleLink(href, wiki);
@@ -182,10 +191,11 @@ export function GenerateArticle({
             slug,
             title,
             sourceSlug,
+            answer, questionSetId, fallbackQuestion, requestId,
           }),
         });
 
-        if (response.status === 409) {
+        if (response.status === 409 && (await response.clone().json()).exists) {
           router.replace(articlePath(wiki, slug));
           router.refresh();
           return;
@@ -232,6 +242,7 @@ export function GenerateArticle({
             }
 
             if (message.type === "text-done") {
+              setMarkdown(message.markdown);
               setStatus("Article written. Generating images…");
             }
 
@@ -291,7 +302,7 @@ export function GenerateArticle({
     }
 
     void generate();
-  }, [router, wiki, slug, title, sourceSlug]);
+  }, [router, wiki, slug, title, sourceSlug, answer, questionSetId, fallbackQuestion, requestId]);
 
   return (
     <section className="wiki-generator" aria-busy={!error}>
@@ -299,7 +310,7 @@ export function GenerateArticle({
         <div className="wiki-generation-error">
           <p>{error}</p>
 
-          <button type="button" onClick={() => window.location.reload()}>
+          <button type="button" onClick={onRetry ?? (() => window.location.reload())}>
             Try again
           </button>
         </div>
