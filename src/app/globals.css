@@ -81,7 +81,8 @@ a {
   margin-inline-start: auto;
 }
 
-.credits-link {
+.credits-link,
+.credits-link:visited {
   display: inline-flex;
   align-items: center;
   gap: 6px;

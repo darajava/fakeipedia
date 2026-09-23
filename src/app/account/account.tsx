@@ -1,15 +1,16 @@
 "use client";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { billingFetch, money, type AccountData } from "@/components/billing-client";
+import { billingFetch, creditCheckoutRequest, creditCheckoutStorageKey, money, type AccountData, type CreditCheckoutRequest } from "@/components/billing-client";
 import { articlePath } from "@/lib/wiki";
 export function Account() {
   const [account, setAccount] = useState<AccountData>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [requestId, setRequestId] = useState("");
+  const request = useRef<CreditCheckoutRequest | undefined>(undefined);
+  const submitting = useRef(false);
   const search = useSearchParams();
   useEffect(() => {
     let active = true;
@@ -18,24 +19,31 @@ export function Account() {
     return () => { active = false; clearInterval(timer); };
   }, []);
   async function buy() {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true); setError("");
-    let stored = "";
-    try { stored = sessionStorage.getItem("credit-checkout-request") ?? ""; } catch { /* In-memory retry remains available. */ }
-    const pending = account?.orders?.find((order) => !order.intentId && order.kind === "credits" && order.status === "pending");
-    const previous = requestId || stored;
-    const processed = account?.orders?.some((order) => order.requestId === previous && order.status !== "pending");
-    const id = pending?.requestId || (!processed && previous) || crypto.randomUUID();
-    setRequestId(id);
-    try { sessionStorage.setItem("credit-checkout-request", id); } catch { /* Optional reload recovery. */ }
     try {
-      const result = await billingFetch<{ url?: string }>("/api/billing/checkout", { kind: "credits", requestId: id });
+      // Recheck the active account before choosing a retry key; a user may have
+      // switched accounts since the last background refresh.
+      const current = await billingFetch<AccountData>("/api/billing/account");
+      setAccount(current);
+      let storage: Storage | undefined;
+      try { storage = sessionStorage; } catch { /* Storage can be unavailable. */ }
+      request.current = creditCheckoutRequest(current, request.current, storage);
+      const result = await billingFetch<{ url?: string }>("/api/billing/checkout", { kind: "credits", requestId: request.current.requestId });
       if (result.url) window.location.assign(result.url);
+      else setAccount(await billingFetch<AccountData>("/api/billing/account"));
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not open checkout."); }
-    finally { setBusy(false); }
+    finally { submitting.current = false; setBusy(false); }
   }
   async function cancel(orderId: string) {
     setBusy(true); setError("");
-    try { await billingFetch("/api/billing/checkout", { action: "cancel", orderId }); setRequestId(""); try { sessionStorage.removeItem("credit-checkout-request"); } catch {} setAccount(await billingFetch<AccountData>("/api/billing/account")); }
+    try {
+      await billingFetch("/api/billing/checkout", { action: "cancel", orderId });
+      if (request.current?.userId === account?.userId) request.current = undefined;
+      try { if (account?.userId) sessionStorage.removeItem(creditCheckoutStorageKey(account.userId)); } catch { /* Optional retry cache. */ }
+      setAccount(await billingFetch<AccountData>("/api/billing/account"));
+    }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Could not cancel checkout."); }
     finally { setBusy(false); }
   }
@@ -46,7 +54,7 @@ export function Account() {
     <h1>Account & credits</h1>
     {error && <p role="alert" className="billing-error">{error}</p>}
     {!account && <p role="status">Loading your account…</p>}
-    {account && !account.signedIn && <>{account.authAvailable ? <Link prefetch={false} className="billing-button" href="/auth?return=%2Faccount">Sign in with email</Link> : <p>Sign-in is not available yet.</p>}<p>You can still read every article for free and purchase individual articles without an account.</p></>}
+    {account && !account.signedIn && <>{account.authAvailable ? <><Link prefetch={false} className="billing-button" href="/auth?return=%2Faccount">Create an account</Link><p>Already have an account? <Link prefetch={false} href="/auth?mode=sign-in&return=%2Faccount">Sign in</Link></p></> : <p>Account access is not available yet.</p>}<p>You can still read every article for free and purchase individual articles without an account.</p></>}
     {account?.signedIn && <>
       <section><h2>{account.credits?.available ?? 0} available credits</h2><p>{account.credits?.reserved ?? 0} reserved for articles in progress. One credit generates one article, including images. Credits do not expire.</p>
       {account.prices && <button disabled={busy || confirmingPayment} onClick={buy}>{confirmingPayment ? "Confirming payment…" : account.orders?.some((order) => !order.intentId && order.status === "pending") ? "Resume credit checkout" : `Buy ${account.prices.pack.credits} credits — ${money(account.prices.pack)}`}</button>}</section>

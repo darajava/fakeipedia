@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import Stripe from "stripe";
+import { creditCheckoutRequest } from "../components/billing-client";
 
 test("payments and durable generation against PostgreSQL", { skip: !process.env.BILLING_TEST_DATABASE_URL }, async (t) => {
   const root = process.cwd();
@@ -214,6 +215,20 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     await fulfillCheckout(String(session.id));
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 200);
     assert.equal(await claimJob(), null);
+  });
+  await t.test("account switching starts a separate credit checkout and retries reuse one order", async () => {
+    const firstUser = await user(); const secondUser = await user();
+    const first = creditCheckoutRequest({ signedIn: true, userId: firstUser, authAvailable: true, prices: null });
+    await createCheckout("credits", null, firstUser, first.requestId);
+    await assert.rejects(createCheckout("credits", null, secondUser, first.requestId), /belongs to another purchase/);
+    const second = creditCheckoutRequest({ signedIn: true, userId: secondUser, authAvailable: true, prices: null }, first);
+    const checkout = await createCheckout("credits", null, secondUser, second.requestId);
+    assert.ok(checkout.url);
+    assert.deepEqual(await createCheckout("credits", null, secondUser, second.requestId), checkout);
+    const orders = (await admin.query("SELECT id,user_id FROM purchase_orders WHERE request_id IN ($1,$2)", [first.requestId, second.requestId])).rows;
+    assert.equal(orders.length, 2);
+    assert.deepEqual(new Set(orders.map(order => order.user_id)), new Set([firstUser, secondUser]));
+    for (const order of orders) await cancelCheckout(null, order.user_id, order.id);
   });
   await t.test("credit pack grants once and cannot be spent by another account", async () => {
     const owner = await user(); const other = await user();

@@ -110,7 +110,7 @@ function PaymentContent({ id }: { id: string }) {
     return <div className="payment-load-error">
       <p role="alert" className="billing-error">{loadError}</p>
       <button type="button" onClick={() => { setLoadError(""); setRetry((n) => n + 1); }}>Retry</button>
-      {account?.authAvailable && !account.signedIn && <p><Link prefetch={false} href={`/auth?return=${encodeURIComponent(`/payment?intent=${id}`)}`}>Sign in to resume your purchase</Link></p>}
+      {account?.authAvailable && !account.signedIn && <p><Link prefetch={false} href={`/auth?mode=sign-in&return=${encodeURIComponent(`/payment?intent=${id}`)}`}>Sign in to resume your purchase</Link></p>}
     </div>;
   }
   return <>
@@ -147,7 +147,10 @@ function PaymentContent({ id }: { id: string }) {
           </div>
         </> : <>
           {account.prices && <p className="payment-price">{money(account.prices.pack)}<span>Pack of {account.prices.pack.credits} credits</span></p>}
-          <div className="payment-card-actions">{account.authAvailable ? <Link prefetch={false} className="billing-button" href={`/auth?return=${encodeURIComponent(`/payment?intent=${id}`)}`}>Sign in to use or buy credits</Link> : <p>Sign-in is not available yet.</p>}</div>
+          <div className="payment-card-actions">{account.authAvailable ? <>
+            <Link prefetch={false} className="billing-button" href={`/auth?return=${encodeURIComponent(`/payment?intent=${id}`)}`}>Create an account to buy credits</Link>
+            <p className="payment-sign-in">Already have an account? <Link prefetch={false} href={`/auth?mode=sign-in&return=${encodeURIComponent(`/payment?intent=${id}`)}`}>Sign in</Link></p>
+          </> : <p>Account access is not available yet.</p>}</div>
         </>}
       </div>
     </section>}

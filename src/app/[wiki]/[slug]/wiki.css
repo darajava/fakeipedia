@@ -1,13 +1,5 @@
-* {
-  box-sizing: border-box;
-}
-
-html {
-  background: var(--wiki-background);
-}
-
-body {
-  margin: 0;
+.wiki-shell {
+  min-height: 100vh;
   background: var(--wiki-background);
   color: var(--wiki-text);
   font-family: Arial, Helvetica, sans-serif;
@@ -15,28 +7,23 @@ body {
   line-height: 1.6;
 }
 
-a {
+:where(.wiki-shell) a {
   color: var(--wiki-link);
   text-decoration: none;
 }
 
-a:visited {
+:where(.wiki-shell) a:visited {
   color: var(--wiki-link-visited);
 }
 
-a:hover,
-a:focus-visible {
+:where(.wiki-shell) a:hover,
+:where(.wiki-shell) a:focus-visible {
   text-decoration: underline;
 }
 
-button,
-input {
+:where(.wiki-shell) button,
+:where(.wiki-shell) input {
   font: inherit;
-}
-
-.wiki-shell {
-  min-height: 100vh;
-  background: var(--wiki-background);
 }
 
 .wiki-header {
