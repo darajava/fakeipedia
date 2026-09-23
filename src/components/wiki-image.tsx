@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import type { ArticleImageState } from "@/lib/article-image-status";
 
 type WikiImageProps = {
   src: string;
@@ -9,14 +10,16 @@ type WikiImageProps = {
   captionContent?: ReactNode;
   priority?: boolean;
   unavailable?: boolean;
+  generating?: boolean;
   retryImage?: { wiki: string; slug: string; filename: string; prompt: string };
 };
 
-export function WikiImage({ src, alt, caption, captionContent, priority = false, unavailable = false, retryImage }: WikiImageProps) {
+export function WikiImage({ src, alt, caption, captionContent, priority = false, unavailable = false, generating = false, retryImage }: WikiImageProps) {
   const [open, setOpen] = useState(false);
   const [failedSource, setFailedSource] = useState<string>();
   const [replacement, setReplacement] = useState<{ original: string; url: string }>();
   const [retrying, setRetrying] = useState(false);
+  const [awaitingGeneration, setAwaitingGeneration] = useState(generating);
   const [retryError, setRetryError] = useState<string>();
   const [editedPrompt, setEditedPrompt] = useState<{ source: string; value: string }>();
   const retryInFlight = useRef(false);
@@ -25,6 +28,38 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
   const promptId = useId();
   const prompt = editedPrompt?.source === src ? editedPrompt.value : retryImage?.prompt ?? alt;
   const renderedCaption = captionContent ?? (caption || alt);
+  const imageWiki = retryImage?.wiki;
+  const imageSlug = retryImage?.slug;
+  const imageFilename = retryImage?.filename;
+
+  useEffect(() => {
+    if (!imageWiki || !imageSlug || !imageFilename || replacement?.original === src || (!generating && failedSource !== src)) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function check() {
+      try {
+        const response = await fetch(`/api/articles/images/status?wiki=${encodeURIComponent(imageWiki!)}&slug=${encodeURIComponent(imageSlug!)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Image status unavailable");
+        const result = await response.json() as { images: Record<string, ArticleImageState> };
+        if (cancelled) return;
+        const image = result.images[imageFilename!];
+        if (image?.state === "pending") {
+          setAwaitingGeneration(true);
+          timer = setTimeout(check, 2000);
+        } else {
+          setAwaitingGeneration(false);
+          if (image?.state === "ready") {
+            setReplacement({ original: src, url: `${image.url}?v=${Date.now()}` });
+            setFailedSource(undefined);
+          } else setFailedSource(src);
+        }
+      } catch {
+        if (!cancelled) timer = setTimeout(check, 3000);
+      }
+    }
+    void check();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [src, generating, failedSource, replacement?.original, imageWiki, imageSlug, imageFilename]);
 
   async function retry() {
     if (retryInFlight.current || (retryImage && !prompt.trim())) return;
@@ -82,6 +117,13 @@ export function WikiImage({ src, alt, caption, captionContent, priority = false,
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
+
+  if (awaitingGeneration && imageSource === src) {
+    return <span className="wiki-image-frame wiki-image-generating">
+      <span className="wiki-image-loading-area" role="status"><span className="wiki-loading-spinner" aria-hidden="true" /><span>Generating image…</span></span>
+      <span className="wiki-image-caption"><span>{renderedCaption}</span></span>
+    </span>;
+  }
 
   if (retrying || (unavailable && imageSource === src) || failedSource === imageSource) {
     return (

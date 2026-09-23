@@ -2,7 +2,7 @@ export function validSlug(value: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
 }
 
-const reservedWikiSlugs = new Set(["api", "w", "wiki", "wiki-images", "search", "random"]);
+const reservedWikiSlugs = new Set(["api", "w", "wiki", "wiki-images", "search", "random", "account", "payment", "auth"]);
 
 export function validWikiSlug(value: string): boolean {
   return validSlug(value) && !reservedWikiSlugs.has(value);

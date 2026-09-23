@@ -29,7 +29,7 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
   const { db } = await import("../db");
   const { articleLockPool, acquireArticleLock, ArticleBusyError } = await import("./article-lock");
   const { POST: prepare } = await import("../app/api/articles/questions/route");
-  const { POST: generate } = await import("../app/api/articles/generate/route");
+  const { generateArticleRequest: generate } = await import("./article-generation");
   const { ensureArticleQuestions } = await import("./article-question-store");
   t.after(async () => {
     process.chdir(root);

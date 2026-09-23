@@ -12,6 +12,7 @@ import { rehypeCodeLinks } from "@/lib/rehype-code-links";
 import { extractArticleImages } from "@/lib/article-draft";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
 import { articleLink, articlePath, imageSource, prepareWikiLinks } from "@/lib/wiki";
+import { articleImageStates } from "@/lib/article-image-status";
 
 type Props = {
   wiki: string;
@@ -20,8 +21,9 @@ type Props = {
 };
 
 /** Shared published-article presentation, including images, tables and red links. */
-export function WikiArticleContent({ wiki, article, existingSlugs }: Props) {
+export async function WikiArticleContent({ wiki, article, existingSlugs }: Props) {
   const retryableImages = extractArticleImages(article.content, article.slug);
+  const imageStates = await articleImageStates(wiki, article);
   const markdown = prepareWikiLinks(article.content.replace(/^#\s+.+?(?:\r?\n)+/, ""), wiki);
   return <>
     <h1>{article.title}</h1>
@@ -83,6 +85,7 @@ export function WikiArticleContent({ wiki, article, existingSlugs }: Props) {
               caption={title ?? alt ?? ""}
               captionContent={<WikiCaption text={title ?? alt ?? ""} wiki={wiki} slug={article.slug} existingSlugs={existingSlugs} />}
               priority={className?.includes("wiki-subject-image")}
+              generating={Boolean(retryableImage && imageStates[retryableImage.filename]?.state === "pending")}
               retryImage={retryableImage ? { wiki, slug: article.slug, filename: retryableImage.filename, prompt: retryableImage.description } : undefined}
             />
           );

@@ -22,6 +22,27 @@
       "when": 1790026437863,
       "tag": "0002_lore_contributions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790029874366,
+      "tag": "0003_wandering_blazing_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790030938520,
+      "tag": "0004_billing_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790118572096,
+      "tag": "0005_jazzy_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

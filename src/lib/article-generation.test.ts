@@ -17,7 +17,7 @@ for (const allImagesFail of [false, true]) {
       }
     });
     const { db } = await import("../db");
-    const { POST } = await import("../app/api/articles/generate/route");
+    const { generateArticleRequest: POST } = await import("./article-generation");
     const { articleLockPool } = await import("./article-lock");
     t.mock.method(articleLockPool, "connect", async () => ({ query: async () => ({ rows: [{ locked: true }] }), release: () => {} }));
     const directory = await mkdtemp(path.join(tmpdir(), "fakeipedia-generation-route-"));

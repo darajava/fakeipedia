@@ -1,0 +1,2 @@
+ALTER TABLE "purchase_orders" ADD COLUMN "checked_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+CREATE INDEX "orders_reconcile_idx" ON "purchase_orders" USING btree ("status","checked_at");

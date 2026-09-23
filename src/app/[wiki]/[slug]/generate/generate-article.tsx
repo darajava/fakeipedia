@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,7 +13,8 @@ import { WikiCaption } from "@/components/wiki-caption";
 import { WikiTable } from "@/components/wiki-table";
 import { rehypeCodeLinks } from "@/lib/rehype-code-links";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
-import type { ArticleImageMessage } from "@/lib/article-images";
+import { applyLiveMessage, type GenerationLiveMessage, type LivePreview } from "@/lib/generation-live";
+import { emptyGenerationProgress } from "@/lib/generation-progress";
 
 const loadingMessages = [
   "Generating article",
@@ -22,50 +23,14 @@ const loadingMessages = [
 ];
 
 export type GenerateArticleProps = {
-  wiki: string;
-  slug: string;
-  title: string;
-  sourceSlug: string;
-  answer?: string;
-  questionSetId?: number;
-  fallbackQuestion?: boolean;
-  requestId?: string;
-  onRetry?: () => void;
-  existingArticleSlugs: string[];
+  wiki: string; slug: string; title: string; intentId: string; token: string;
+  existingArticleSlugs: string[]; onRetry?: () => void;
 };
 
-type StreamMessage =
-  | ArticleImageMessage
-  | {
-      type: "delta";
-      delta: string;
-    }
-  | {
-      type: "text-done";
-      markdown: string;
-    }
-  | {
-      type: "done";
-      slug: string;
-    }
-  | {
-      type: "error";
-      message: string;
-    };
-
-export function GenerateArticle({
-  wiki,
-  slug,
-  title,
-  sourceSlug,
-  existingArticleSlugs,
-  answer, questionSetId, fallbackQuestion, requestId, onRetry,
-}: GenerateArticleProps) {
+export function GenerateArticle({ wiki, slug, title, intentId, token, existingArticleSlugs, onRetry }: GenerateArticleProps) {
   const router = useRouter();
-  const started = useRef(false);
-
   const [markdown, setMarkdown] = useState("");
-  const [, setStatus] = useState("");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState<string>();
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const isWaitingForArticle = !markdown && !error;
@@ -171,142 +136,64 @@ export function GenerateArticle({
   );
 
   useEffect(() => {
-    if (started.current) {
-      return;
-    }
-
-    started.current = true;
-
-    async function generate() {
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    let preview: LivePreview = { generationId: null, progress: emptyGenerationProgress() };
+    async function connect() {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
       try {
-        const response = await fetch("/api/articles/generate", {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            wiki,
-            slug,
-            title,
-            sourceSlug,
-            answer, questionSetId, fallbackQuestion, requestId,
-          }),
+        const response = await fetch("/api/articles/progress", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ intentId, token }), signal: abort.signal,
         });
-
-        if (response.status === 409 && (await response.clone().json()).exists) {
-          router.replace(articlePath(wiki, slug));
-          router.refresh();
-          return;
-        }
-
         if (!response.ok || !response.body) {
-          const result = (await response.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-
-          throw new Error(
-            result?.error ?? "Could not start article generation.",
-          );
+          const result = await response.json().catch(() => null);
+          throw new Error(result?.error ?? "Could not connect to live generation.");
         }
-
-        const reader = response.body.getReader();
+        reader = response.body.getReader();
         const decoder = new TextDecoder();
-
         let buffer = "";
-
-        while (true) {
+        while (!abort.signal.aborted) {
           const { value, done } = await reader.read();
-
-          buffer += decoder.decode(value, {
-            stream: !done,
-          });
-
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
+          buffer += decoder.decode(value, { stream: !done });
+          const lines = buffer.split("\n"); buffer = lines.pop() ?? "";
           for (const line of lines) {
-            if (!line.trim()) {
-              continue;
-            }
-
-            const message = JSON.parse(line) as StreamMessage;
-
-            if (message.type === "delta") {
-              setMarkdown((current) => current + message.delta);
-            }
-
-            if (message.type === "error") {
-              throw new Error(message.message);
-            }
-
-            if (message.type === "text-done") {
-              setMarkdown(message.markdown);
-              setStatus("Article written. Generating images…");
-            }
-
-            if (message.type === "images-start") {
-              setStatus(
-                `Generating ${message.count} ${
-                  message.count === 1 ? "image" : "images"
-                }…`,
-              );
-            }
-
-            if (message.type === "image-start") {
-              setStatus(
-                `Generating image ${message.index} of ${message.count}…`,
-              );
-            }
-
-            if (message.type === "image-done") {
-              setReadyImages((current) => ({
-                ...current,
-                [message.filename]: message.url,
-              }));
-            }
-
-            if (message.type === "image-error") {
-              setFailedImages((current) => ({
-                ...current,
-                [message.filename]: true,
-              }));
-            }
-
-            if (message.type === "done") {
-              setStatus("Article saved. Opening it…");
-
-              router.replace(articlePath(wiki, message.slug));
-
-              router.refresh();
-              return;
+            if (!line.trim() || abort.signal.aborted) continue;
+            const message = JSON.parse(line) as GenerationLiveMessage;
+            preview = applyLiveMessage(preview, message);
+            setMarkdown(preview.progress.markdown);
+            setReadyImages(preview.progress.readyImages);
+            setFailedImages(preview.progress.failedImages);
+            setError(undefined);
+            if (message.type === "snapshot") {
+              if (message.previewComplete || message.status === "superseded") {
+                router.replace(articlePath(wiki, slug)); router.refresh(); return;
+              }
+              if (message.status === "failed") {
+                setError(`We couldn’t finish this article. ${message.funding === "credit" ? "Your credit has been returned. " : ""}Your answer is saved.`);
+                return;
+              }
+              setStatus(message.status === "queued"
+                ? message.attempts ? "Generation was interrupted. Retrying automatically…" : "Your article is queued…"
+                : "");
             }
           }
-
-          if (done) {
-            break;
-          }
+          if (done) break;
         }
-
-        throw new Error("The generation stream ended unexpectedly.");
-      } catch (caughtError) {
-        setStatus("Generation failed.");
-
-        setError(
-          caughtError instanceof Error
-            ? caughtError.message
-            : "Unknown generation error.",
-        );
-      }
+        if (!abort.signal.aborted) timer = setTimeout(connect, 500);
+      } catch (failure) {
+        if (abort.signal.aborted) return;
+        setError(failure instanceof Error ? failure.message : "Connection interrupted. Reconnecting…");
+        timer = setTimeout(connect, 3000);
+      } finally { await reader?.cancel().catch(() => {}); }
     }
-
-    void generate();
-  }, [router, wiki, slug, title, sourceSlug, answer, questionSetId, fallbackQuestion, requestId]);
+    void connect();
+    return () => { abort.abort(); clearTimeout(timer); };
+  }, [router, wiki, slug, intentId, token]);
 
   return (
     <section className="wiki-generator" aria-busy={!error}>
-      {error ? (
+      {error && (
         <div className="wiki-generation-error">
           <p>{error}</p>
 
@@ -314,7 +201,8 @@ export function GenerateArticle({
             Try again
           </button>
         </div>
-      ) : (
+      )}
+      {status && !error && <p className="wiki-generation-status" role="status">{status}</p>}
         <article className="wiki-article wiki-generation-preview">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title, wiki, slug }]]}
@@ -334,7 +222,6 @@ export function GenerateArticle({
             </div>
           )}
         </article>
-      )}
     </section>
   );
 }

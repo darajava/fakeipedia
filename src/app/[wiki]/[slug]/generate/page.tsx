@@ -22,6 +22,7 @@ type GeneratePageProps = {
   searchParams: Promise<{
     title?: string;
     source?: string;
+    intent?: string;
   }>;
 };
 
@@ -60,7 +61,7 @@ export default async function GeneratePage({
   ]);
 
   const existingArticleSlugs = existingArticles.map((article) => article.slug);
-  if (existingArticleSlugs.includes(slug)) redirect(articlePath(wiki, slug));
+  if (existingArticleSlugs.includes(slug) && !query.intent) redirect(articlePath(wiki, slug));
 
   return (
     <div className="wiki-shell">
@@ -104,6 +105,7 @@ export default async function GeneratePage({
               slug={slug}
               title={title}
               sourceSlug={sourceSlug}
+              initialIntentId={query.intent}
               existingArticleSlugs={existingArticleSlugs}
             >
               {sourceArticle && !sourceArticle.slug.startsWith("stub-") && (

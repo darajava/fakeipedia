@@ -5,16 +5,19 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node src/scripts/start.mjs",
     "lint": "eslint",
     "test": "node --import tsx --test src/lib/*.test.ts",
     "db:migrate": "drizzle-kit migrate",
     "import:wiki": "node --import tsx src/scripts/import-wiki.ts",
     "generate:stubs": "node --import tsx src/scripts/generate-stubs.ts",
-    "reset:wiki": "node --import tsx src/scripts/reset-wiki.ts"
+    "reset:wiki": "node --import tsx src/scripts/reset-wiki.ts",
+    "worker": "node --import tsx src/scripts/generation-worker.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.9.4",
     "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.2",
     "gray-matter": "^4.0.3",
     "katex": "^0.16.47",
@@ -31,6 +34,8 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "stripe": "^22.6.2",
+    "tsx": "^4.23.15",
     "unified": "^11.0.5"
   },
   "devDependencies": {
@@ -38,10 +43,8 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
-    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

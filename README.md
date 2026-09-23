@@ -81,9 +81,9 @@ Stubs are articles whose slug begins with `stub-`. The last link supplies the ta
 
 Run `npm run reset:wiki -- --dry-run` to preview the reset without connecting to the database or changing files.
 
-Run `npm run reset:wiki` to empty `articles`, `article_revisions` and `users` in the database configured by `DATABASE_URL`, and reset their IDs. The schema and migration history remain intact. The script deletes non-stub Markdown files, image files and the contents of image directories under `wiki-files`, preserving every `stub-*.md` file and all wiki folders. It does not follow symbolic links.
+Run `npm run reset:wiki` to delete article content, revisions, question sets and contributions in the database configured by `DATABASE_URL`. Accounts, purchases, credit history, generation records, schema and migration history remain intact. The reset refuses to run while payments, refunds or generation are pending. The script deletes non-stub Markdown files, image files and the contents of image directories under `wiki-files`, preserving every `stub-*.md` file and all wiki folders. It does not follow symbolic links.
 
-Stop article generation before resetting. Files are staged and restored if the database reset fails. The database is left empty; run `npm run import:wiki` afterwards to reload the preserved stubs.
+Stop article generation before resetting. Files are staged and restored if the database reset fails. Article content is left empty; run `npm run import:wiki` afterwards to reload the preserved stubs.
 
 ## Validation
 
@@ -92,3 +92,7 @@ npm test
 npm run lint
 npm run build
 ```
+
+## Article purchases and account credits
+
+See [payment setup and Railway deployment](docs/payments.md). New article generation requires a Stripe article purchase or one account credit; reading remains free. Configure the settings in `.env.example`, test with Stripe test-mode keys, and run `npm run worker` alongside `npm run dev`. Production `npm start` starts both processes; set Railway’s pre-deploy command to `npm run db:migrate`.

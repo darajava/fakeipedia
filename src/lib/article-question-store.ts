@@ -90,7 +90,7 @@ export async function ensureArticleQuestions(source: Source, retry = false) {
             messages: [
               {
                 role: "user",
-                content: `Generate one intelligent, open-ended world-building question for EACH target in the supplied list.
+                content: `Generate one simple, open-ended world-building question for EACH target in the supplied list.
 A reader following a link from the source article will optionally answer it before creating the target article.
 Invite a directon for the target article's content.
 Ask one concise open-ended question, not multiple-choice options or several questions combined.

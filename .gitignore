@@ -45,3 +45,4 @@ next-env.d.ts
 /wiki-files/**/images/**
 !/wiki-files/**/
 !/wiki-files/**/stub-*
+!.env.example
