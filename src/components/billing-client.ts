@@ -2,6 +2,7 @@ export type Price = { id: string; amount: number; currency: string; credits?: nu
 export type AccountData = {
   signedIn: boolean; authAvailable: boolean;
   userId?: number;
+  handle?: string | null;
   credits?: { balance: number; reserved: number; available: number };
   prices: { article: Price; pack: Price } | null;
   orders?: { id: string; intentId: string | null; requestId: string; kind: string; status: string; credits: number; amount: number; currency: string; createdAt: string; refundNeedsAttention: boolean }[];

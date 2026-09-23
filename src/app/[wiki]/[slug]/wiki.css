@@ -193,7 +193,8 @@
   content: "";
 }
 
-.wiki-article > h1 {
+.wiki-article > h1,
+.wiki-lore-preparation > h1 {
   margin: 0;
   padding: 0 0 5px;
   border-bottom: 1px solid var(--wiki-border);
@@ -480,7 +481,8 @@
     font-size: 17px;
   }
 
-  .wiki-article > h1 {
+  .wiki-article > h1,
+  .wiki-lore-preparation > h1 {
     font-size: 27px;
   }
 

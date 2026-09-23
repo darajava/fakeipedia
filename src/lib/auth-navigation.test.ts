@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { authPagePath, authReturnPath } from "./auth-navigation";
+import { authPagePath, authReturnPath, signupCompletionPath } from "./auth-navigation";
 
 test("authentication retains the saved article destination when switching forms", () => {
   const destination = "/payment?intent=example";
@@ -11,6 +11,9 @@ test("authentication retains the saved article destination when switching forms"
   }
   assert.equal(authReturnPath(undefined), "/account");
   assert.equal(authReturnPath("https://fakeipedia.org/account", "https://fakeipedia.org"), "/account");
+  const completion = new URL(signupCompletionPath(destination), "https://fakeipedia.org");
+  assert.equal(completion.pathname, "/auth/complete");
+  assert.equal(authReturnPath(completion.searchParams.get("return")!, completion.origin), destination);
 });
 
 test("authentication rejects external and unrelated return destinations", () => {

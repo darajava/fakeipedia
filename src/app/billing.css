@@ -48,3 +48,8 @@
   .payment-page .billing-nav { margin-bottom: 1.75rem; }
   .payment-page .payment-card { padding: 1.25rem; }
 }
+
+.public-handle-form { max-width: 36rem; }
+.public-handle-form label { display: block; margin-bottom: .5rem; }
+.public-handle-form input { display: block; width: 100%; padding: .65rem; border: 1px solid var(--wiki-border); border-radius: 2px; font: inherit; color: var(--wiki-text); background: var(--wiki-background); }
+.public-handle-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }

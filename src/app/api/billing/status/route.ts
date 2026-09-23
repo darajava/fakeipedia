@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const job = await authorizeIntent(intent, user?.id ?? null);
     const orders = await latestOrders(intent.id, user?.id ?? null);
     return privateJson({
-      intent: { id: intent.id, wiki: intent.wiki, slug: intent.slug, title: intent.title, sourceSlug: intent.sourceSlug, question: intent.question, answer: intent.answer },
+      intent: { id: intent.id, wiki: intent.wiki, slug: intent.slug, title: intent.title, sourceSlug: intent.sourceSlug, answer: intent.answer },
       job: job ? { id: job.id, orderId: job.orderId, status: job.status, attempts: job.attempts, funding: job.funding, previewComplete: generationPreviewComplete(job) } : null,
       ...(body.includeProgress === true ? { progress: job?.progress ?? null } : {}),
       orders: orders.map((order) => ({ id: order.id, kind: order.kind, status: order.status, amount: order.amount, currency: order.currency, refundNeedsAttention: Boolean(order.refundError) })),

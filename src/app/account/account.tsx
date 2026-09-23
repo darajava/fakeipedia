@@ -4,6 +4,7 @@ import { UserButton } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { billingFetch, creditCheckoutRequest, creditCheckoutStorageKey, money, type AccountData, type CreditCheckoutRequest } from "@/components/billing-client";
+import { PublicHandleForm } from "@/components/public-handle-form";
 import { articlePath } from "@/lib/wiki";
 export function Account() {
   const [account, setAccount] = useState<AccountData>();
@@ -56,6 +57,7 @@ export function Account() {
     {!account && <p role="status">Loading your account…</p>}
     {account && !account.signedIn && <>{account.authAvailable ? <><Link prefetch={false} className="billing-button" href="/auth?return=%2Faccount">Create an account</Link><p>Already have an account? <Link prefetch={false} href="/auth?mode=sign-in&return=%2Faccount">Sign in</Link></p></> : <p>Account access is not available yet.</p>}<p>You can still read every article for free and purchase individual articles without an account.</p></>}
     {account?.signedIn && <>
+      <section><h2>Public name or handle</h2><PublicHandleForm key={account.userId} initialHandle={account.handle ?? null} /></section>
       <section><h2>{account.credits?.available ?? 0} available credits</h2><p>{account.credits?.reserved ?? 0} reserved for articles in progress. One credit generates one article, including images. Credits do not expire.</p>
       {account.prices && <button disabled={busy || confirmingPayment} onClick={buy}>{confirmingPayment ? "Confirming payment…" : account.orders?.some((order) => !order.intentId && order.status === "pending") ? "Resume credit checkout" : `Buy ${account.prices.pack.credits} credits — ${money(account.prices.pack)}`}</button>}</section>
       {confirmingPayment && <p role="status">Checking your payment… Your credits will appear automatically.</p>}

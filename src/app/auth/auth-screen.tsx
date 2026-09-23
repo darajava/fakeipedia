@@ -3,7 +3,7 @@ import { SignIn, SignUp } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { authPagePath, authReturnPath } from "@/lib/auth-navigation";
+import { authPagePath, authReturnPath, signupCompletionPath } from "@/lib/auth-navigation";
 import "./auth.css";
 
 export type AuthSearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -36,8 +36,8 @@ export async function AuthScreen({ mode, searchParams }: { mode: "sign-up" | "si
     <nav className="auth-nav"><Link href="/">Fakeipedia</Link><ThemeToggle /></nav>
     <div className="auth-form">
       {configured ? mode === "sign-up"
-        ? <SignUp routing="path" path="/auth/sign-up" signInUrl={authPagePath("sign-in", returnPath)} forceRedirectUrl={returnPath} signInForceRedirectUrl={returnPath} appearance={appearance} />
-        : <SignIn routing="path" path="/auth/sign-in" withSignUp={false} signUpUrl={authPagePath("sign-up", returnPath)} forceRedirectUrl={returnPath} signUpForceRedirectUrl={returnPath} appearance={appearance} />
+        ? <SignUp routing="path" path="/auth/sign-up" signInUrl={authPagePath("sign-in", returnPath)} forceRedirectUrl={signupCompletionPath(returnPath)} signInForceRedirectUrl={returnPath} appearance={appearance} />
+        : <SignIn routing="path" path="/auth/sign-in" withSignUp={false} signUpUrl={authPagePath("sign-up", returnPath)} forceRedirectUrl={returnPath} signUpForceRedirectUrl={signupCompletionPath(returnPath)} appearance={appearance} />
         : <p role="alert">Account access is not available yet. Your saved answer is safe.</p>}
     </div>
   </main>;

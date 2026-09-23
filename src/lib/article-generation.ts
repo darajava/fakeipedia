@@ -6,8 +6,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { articles, loreContributions } from "@/db/schema";
 import { acquireArticleLock, ArticleBusyError } from "@/lib/article-lock";
-import { ensureArticleQuestions } from "@/lib/article-question-store";
-import { questionTargets } from "@/lib/article-questions";
+import { generationTargets } from "@/lib/article-targets";
 import { LoreInputError, readLoreInput, lorePrompt } from "@/lib/lore-input";
 import { saveLoreContribution } from "@/lib/lore-contributions";
 import { generateArticleDraft } from "@/lib/article-draft";
@@ -23,8 +22,6 @@ export type GenerateRequest = {
   title?: unknown;
   sourceSlug?: unknown;
   answer?: unknown;
-  fallbackQuestion?: unknown;
-  questionSetId?: unknown;
   requestId?: unknown;
 };
 
@@ -214,7 +211,7 @@ async function generate(body: GenerateRequest, release: () => Promise<void>, hoo
   }
 
   if (
-    !questionTargets(sourceArticle, wiki).some((target) => target.slug === slug)
+    !generationTargets(sourceArticle, wiki).some((target) => target.slug === slug)
   ) {
     return Response.json(
       { error: "The source article no longer links to this page." },
@@ -470,7 +467,7 @@ Image rules:
     prompt,
     lorePrompt(
       contribution
-        ? { question: contribution.question, answer: contribution.answer }
+        ? { answer: contribution.answer }
         : undefined,
     ),
   ]
@@ -498,7 +495,7 @@ Image rules:
         );
 
         // Preserve the finished article before starting optional illustrations.
-        const saved = await saveArticle(
+        await saveArticle(
           wiki,
           slug,
           title,
@@ -513,12 +510,8 @@ Image rules:
           markdown,
         });
 
-        await Promise.allSettled([
-          generateArticleImages({ wiki, markdown, slug, title }, send),
-          ensureArticleQuestions(saved).catch((error) => {
-            console.error("Optional article questions failed:", error);
-          }),
-        ]);
+        await generateArticleImages({ wiki, markdown, slug, title }, send)
+          .catch((error) => console.error("Optional article images failed:", error));
 
         send({
           type: "done",

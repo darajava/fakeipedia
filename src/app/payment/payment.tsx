@@ -7,7 +7,7 @@ import { articlePath } from "@/lib/wiki";
 import { PaymentLoading } from "./payment-loading";
 
 type Status = {
-  intent: { id: string; wiki: string; slug: string; title: string; sourceSlug: string; question: string | null; answer: string };
+  intent: { id: string; wiki: string; slug: string; title: string; sourceSlug: string; answer: string };
   job: { id: string; orderId: string | null; status: string; attempts: number; funding: string; previewComplete: boolean } | null;
   orders: { id: string; kind: string; status: string; refundNeedsAttention: boolean }[];
   exists: boolean; signedIn: boolean; credits: { available: number; reserved: number } | null;

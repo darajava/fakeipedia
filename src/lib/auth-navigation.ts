@@ -13,3 +13,7 @@ export function authReturnPath(requested: string = "/account", origin: string = 
 export function authPagePath(mode: "sign-up" | "sign-in", returnPath: string) {
   return `/auth/${mode}?return=${encodeURIComponent(returnPath)}`;
 }
+
+export function signupCompletionPath(returnPath: string) {
+  return `/auth/complete?return=${encodeURIComponent(returnPath)}`;
+}

@@ -28,9 +28,7 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
   process.chdir(directory);
   const { db } = await import("../db");
   const { articleLockPool, acquireArticleLock, ArticleBusyError } = await import("./article-lock");
-  const { POST: prepare } = await import("../app/api/articles/questions/route");
   const { generateArticleRequest: generate } = await import("./article-generation");
-  const { ensureArticleQuestions } = await import("./article-question-store");
   t.after(async () => {
     process.chdir(root);
     await db.$client.end();
@@ -43,22 +41,14 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
     }
   });
   t.mock.method(console, "error", () => {});
-  let questionCalls = 0;
   let articleCalls = 0;
-  let malformedQuestions = false;
   let failArticle = false;
   let onArticle: (prompt: string) => Promise<void> = async () => {};
   t.mock.method(globalThis, "fetch", async (url: string | URL | Request, init?: RequestInit) => {
     const request = JSON.parse(String(init?.body));
     if (String(url).includes("generativelanguage.googleapis.com")) {
       const prompt = request.messages[0].content as string;
-      if (!request.stream) {
-        questionCalls++;
-        const data = JSON.parse(prompt.split("\n").at(-1)!);
-        assert.ok(data.source.content);
-        const questions = data.targets.map((target: { slug: string }) => ({ slug: target.slug, question: `What changed ${target.slug} after ${data.source.title}?` }));
-        return Response.json({ choices: [{ finish_reason: "stop", message: { content: malformedQuestions ? "{}" : JSON.stringify(questions) } }] });
-      }
+      assert.equal(request.stream, true, "Only article generation should call the text model");
       articleCalls++;
       await onArticle(prompt);
       const slug = prompt.match(/Article URL slug: ([^\n]+)/)![1];
@@ -71,60 +61,22 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
   });
   const insertSource = async (slug: string, content: string) => (await admin.query('INSERT INTO articles (wiki, slug, title, content) VALUES ($1,$2,$3,$4) RETURNING *', ["world", slug, slug, content])).rows[0];
   const request = (body: object) => new Request("http://localhost/api", { method: "POST", body: JSON.stringify(body) });
-  const prep = (sourceSlug: string, slug: string, retry = false) => prepare(request({ wiki: "world", sourceSlug, slug, retry }));
   const messages = async (response: Response) => {
     assert.equal(response.status, 200);
     return (await response.text()).trim().split("\n").map((line) => JSON.parse(line));
   };
 
-  await t.test("first visits cache source-specific questions and edits invalidate the cache", async () => {
-    await insertSource("source", "The [[Glass Rebellion]] and [[Harbor]] changed the world.");
-    const a = await (await prep("source", "glass-rebellion")).json();
-    assert.match(a.question, /after source/);
-    const before = questionCalls;
-    const b = await (await prep("source", "harbor")).json();
-    assert.equal(a.questionSetId, b.questionSetId);
-    assert.equal(questionCalls, before);
-    await insertSource("other", "The [[Glass Rebellion]] was remembered here.");
-    const other = await (await prep("other", "glass-rebellion")).json();
-    assert.notEqual(other.questionSetId, a.questionSetId);
-    assert.notEqual(other.question, a.question);
-    await admin.query("UPDATE articles SET content = content || ' Changed.' WHERE slug = 'source'");
-    const edited = await (await prep("source", "glass-rebellion")).json();
-    assert.notEqual(edited.questionSetId, a.questionSetId);
-    assert.equal((await prep("source", "not-linked")).status, 400);
-  });
+  await insertSource("source", "The [[Glass Rebellion]] and [[Harbor]] changed the world.");
+  await insertSource("other", "The [[Glass Rebellion]] was remembered here.");
 
-  await t.test("concurrent question preparation returns pending without a duplicate model request", async () => {
-    const row = await insertSource("locked", "[[Locked Target]]");
-    const { questionContentHash } = await import("./article-questions");
-    const release = await acquireArticleLock(`questions:${row.id}:${questionContentHash(row.content)}`);
-    const before = questionCalls;
-    assert.equal((await prep("locked", "locked-target")).status, 202);
-    assert.equal(questionCalls, before);
-    await release();
-    assert.equal((await prep("locked", "locked-target")).status, 200);
-    const lock = await acquireArticleLock("independent-lock");
-    await assert.rejects(acquireArticleLock("independent-lock"), ArticleBusyError);
-    await lock();
-  });
-
-  await t.test("fallback snapshots remain exact after a successful question retry", async () => {
+  await t.test("answers are saved before generation without question preparation", async () => {
     await insertSource("fallback-source", "[[Fallback Target]]");
-    malformedQuestions = true;
-    const fallback = await (await prep("fallback-source", "fallback-target")).json();
-    assert.equal(fallback.fallback, true);
-    malformedQuestions = false;
-    const tailored = await (await prep("fallback-source", "fallback-target", true)).json();
-    assert.equal(tailored.fallback, false);
-    assert.notEqual(tailored.question, fallback.question);
-    const body = { wiki: "world", slug: "fallback-target", title: "Fallback Target", sourceSlug: "fallback-source", questionSetId: fallback.questionSetId, fallbackQuestion: true, answer: "  A guild tradition.\n", requestId: crypto.randomUUID() };
+    const body = { wiki: "world", slug: "fallback-target", title: "Fallback Target", sourceSlug: "fallback-source", answer: "  A guild tradition.\n", requestId: crypto.randomUUID() };
     onArticle = async (prompt) => {
       const stored = (await admin.query("SELECT * FROM lore_contributions WHERE request_id = $1", [body.requestId])).rows[0];
       assert.equal(stored.answer, body.answer);
-      assert.equal(stored.question, fallback.question);
       assert.equal(stored.status, "generating");
-      assert.ok(prompt.includes(JSON.stringify({ question: fallback.question, answer: body.answer })));
+      assert.ok(prompt.includes(JSON.stringify({ answer: body.answer })));
     };
     const result = await messages(await generate(request(body)));
     assert.equal(result.at(-1).type, "done");
@@ -140,25 +92,20 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
   });
 
   await t.test("failed generation retains one contribution and retry succeeds without duplication", async () => {
-    const question = await (await prep("source", "glass-rebellion")).json();
-    const body = { wiki: "world", slug: "glass-rebellion", title: "Glass Rebellion", sourceSlug: "source", questionSetId: question.questionSetId, answer: "The guild refused the crown.", requestId: crypto.randomUUID() };
+    const body = { wiki: "world", slug: "glass-rebellion", title: "Glass Rebellion", sourceSlug: "source", answer: "The guild refused the crown.", requestId: crypto.randomUUID() };
     failArticle = true;
     const failed = await messages(await generate(request(body)));
     assert.equal(failed.at(-1).type, "error");
     assert.equal((await admin.query("SELECT status FROM lore_contributions WHERE request_id = $1", [body.requestId])).rows[0].status, "failed");
     failArticle = false;
-    const different = await (await prep("other", "glass-rebellion")).json();
-    assert.equal((await generate(request({ ...body, questionSetId: different.questionSetId }))).status, 400);
+    assert.equal((await generate(request({ ...body, sourceSlug: "other" }))).status, 400);
+    assert.equal((await generate(request({ ...body, slug: "not-linked" }))).status, 400);
     assert.equal((await generate(request({ ...body, answer: "Changed input" }))).status, 400);
-    malformedQuestions = true;
     const succeeded = await messages(await generate(request(body)));
-    malformedQuestions = false;
     assert.equal(succeeded.at(-1).type, "done");
     const rows = (await admin.query("SELECT * FROM lore_contributions WHERE request_id = $1", [body.requestId])).rows;
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, "succeeded");
-    const postQuestions = (await admin.query("SELECT status FROM article_question_sets WHERE source_article_id = $1", [rows[0].article_id])).rows;
-    assert.equal(postQuestions[0].status, "failed");
   });
 
   await t.test("skipped generation has no contribution and concurrent attempts cannot overwrite it", async () => {
@@ -182,8 +129,7 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
 
   await t.test("a contribution-storage failure never calls the model", async () => {
     await insertSource("storage-source", "[[Storage Target]]");
-    const question = await (await prep("storage-source", "storage-target")).json();
-    const body = { wiki: "world", slug: "storage-target", title: "Storage Target", sourceSlug: "storage-source", questionSetId: question.questionSetId, answer: "A stored idea", requestId: crypto.randomUUID() };
+    const body = { wiki: "world", slug: "storage-target", title: "Storage Target", sourceSlug: "storage-source", answer: "A stored idea", requestId: crypto.randomUUID() };
     const before = articleCalls;
     const insert = t.mock.method(db, "insert", () => { throw new Error("Storage unavailable"); });
     const response = await generate(request(body));
@@ -194,8 +140,7 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
 
   await t.test("article and contribution commit together and a failed commit removes the generated file", async () => {
     await insertSource("rollback-source", "[[Rollback Target]]");
-    const question = await (await prep("rollback-source", "rollback-target")).json();
-    const body = { wiki: "world", slug: "rollback-target", title: "Rollback Target", sourceSlug: "rollback-source", questionSetId: question.questionSetId, answer: "A charter", requestId: crypto.randomUUID() };
+    const body = { wiki: "world", slug: "rollback-target", title: "Rollback Target", sourceSlug: "rollback-source", answer: "A charter", requestId: crypto.randomUUID() };
     await admin.query(`CREATE FUNCTION reject_lore_success() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Commit unavailable'; END $$;
       CREATE TRIGGER reject_lore_success BEFORE UPDATE ON lore_contributions FOR EACH ROW WHEN (NEW.status = 'succeeded') EXECUTE FUNCTION reject_lore_success();`);
     const failed = await messages(await generate(request(body)));
@@ -209,8 +154,7 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
 
   await t.test("disconnecting a reader does not lose their contribution or completed article", async () => {
     await insertSource("disconnect-source", "[[Disconnect Target]]");
-    const question = await (await prep("disconnect-source", "disconnect-target")).json();
-    const body = { wiki: "world", slug: "disconnect-target", title: "Disconnect Target", sourceSlug: "disconnect-source", questionSetId: question.questionSetId, answer: "A remembered custom", requestId: crypto.randomUUID() };
+    const body = { wiki: "world", slug: "disconnect-target", title: "Disconnect Target", sourceSlug: "disconnect-source", answer: "A remembered custom", requestId: crypto.randomUUID() };
     let releaseModel!: () => void;
     let modelStarted!: () => void;
     const held = new Promise<void>((resolve) => { releaseModel = resolve; });
@@ -242,12 +186,8 @@ test("lore preparation and generation against PostgreSQL", { skip: !process.env.
     await admin.query("DELETE FROM articles WHERE slug = 'fallback-source'");
     const row = (await admin.query("SELECT * FROM lore_contributions WHERE target_slug = 'fallback-target'")).rows[0];
     assert.equal(row.source_article_id, null);
-    assert.equal(row.question_set_id, null);
     assert.equal(row.answer, "  A guild tradition.\n");
     await admin.query("DELETE FROM articles WHERE slug = 'fallback-target'");
     assert.equal((await admin.query("SELECT * FROM lore_contributions WHERE target_slug = 'fallback-target'")).rows.length, 0);
-    const rowSource = (await admin.query("SELECT * FROM articles WHERE slug = 'source'")).rows[0];
-    const result = await ensureArticleQuestions({ ...rowSource, wiki: "world" });
-    assert.equal(result.status, "ready");
   });
 });

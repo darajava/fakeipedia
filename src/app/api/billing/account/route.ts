@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       db.select().from(purchaseOrders).where(eq(purchaseOrders.userId, user.id)).orderBy(desc(purchaseOrders.createdAt)).limit(100),
       db.select({ id: generationJobs.id, intentId: generationJobs.intentId, status: generationJobs.status, createdAt: generationJobs.createdAt, wiki: generationIntents.wiki, slug: generationIntents.slug, title: generationIntents.title }).from(generationJobs).innerJoin(generationIntents, eq(generationIntents.id, generationJobs.intentId)).where(eq(generationJobs.userId, user.id)).orderBy(desc(generationJobs.createdAt)).limit(100),
     ]);
-    return privateJson({ signedIn: true, userId: user.id, authAvailable: true, credits: await creditBalance(user.id), prices: catalog ?? null,
+    return privateJson({ signedIn: true, userId: user.id, handle: user.handle, authAvailable: true, credits: await creditBalance(user.id), prices: catalog ?? null,
       orders: orders.map((order) => ({ id: order.id, intentId: order.intentId, requestId: order.requestId, kind: order.kind, status: order.status, credits: order.creditQuantity, amount: order.amount, currency: order.currency, createdAt: order.createdAt, refundNeedsAttention: Boolean(order.refundError) })), jobs });
   });
 }

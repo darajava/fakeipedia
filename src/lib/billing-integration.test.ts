@@ -52,7 +52,9 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   const { POST: progressEndpoint } = await import("../app/api/articles/progress/route");
   const { GET: imageStatusEndpoint } = await import("../app/api/articles/images/status/route");
   const { GET: balanceEndpoint } = await import("../app/api/billing/balance/route");
-  const { questionContentHash } = await import("./article-questions");
+  const { savePublicHandle } = await import("./account-profile");
+  const { discussionContributions } = await import("./discussion-contributions");
+  const { POST: profileEndpoint } = await import("../app/api/account/profile/route");
   const sessions = new Map<string, Record<string, unknown>>();
   const sessionKeys = new Map<string, string>();
   const refunds = new Map<string, Record<string, unknown>>();
@@ -111,7 +113,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     }
     const request = JSON.parse(String(init?.body));
     if (url.hostname === "generativelanguage.googleapis.com") {
-      if (!request.stream) return Response.json({ choices: [{ finish_reason: "stop", message: { content: "malformed optional question output" } }] });
+      assert.equal(request.stream, true, "Only article generation should call the text model");
       modelCalls++;
       const prompt = request.messages[0].content as string;
       await beforeModel(prompt);
@@ -130,10 +132,8 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   const draft = async (answer = "", target?: string) => {
     const slug = target ?? `target-${++sequence}`;
     const sourceSlug = `source-${++sequence}`;
-    const [source] = (await admin.query("INSERT INTO articles(wiki,slug,title,content) VALUES('world',$1,$2,$3) RETURNING *", [sourceSlug, "Source", `See [[${slug}]].`])).rows;
-    const question = "What custom should shape this place?";
-    const [set] = (await admin.query("INSERT INTO article_question_sets(source_article_id,content_hash,questions,status) VALUES($1,$2,$3,'ready') RETURNING *", [source.id, questionContentHash(source.content), JSON.stringify([{ slug, title: slug, question }])])).rows;
-    const body = { wiki: "world", slug, title: slug, sourceSlug, questionSetId: set.id, answer, requestId: crypto.randomUUID(), token: randomBytes(32).toString("hex") };
+    await admin.query("INSERT INTO articles(wiki,slug,title,content) VALUES('world',$1,$2,$3) RETURNING *", [sourceSlug, "Source", `See [[${slug}]].`]);
+    const body = { wiki: "world", slug, title: slug, sourceSlug, answer, requestId: crypto.randomUUID(), token: randomBytes(32).toString("hex") };
     return { intent: await saveIntent(body), body };
   };
   const user = async (balance = 0) => {
@@ -200,7 +200,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     assert.equal((await admin.query("SELECT count(*)::int AS n FROM generation_jobs WHERE intent_id=$1", [d.intent.id])).rows[0].n, 1);
     beforeModel = async (prompt) => {
       assert.ok(prompt.includes("The ferrymen elect their king."));
-      assert.ok(prompt.includes("What custom should shape this place?"));
+      assert.ok(prompt.includes(JSON.stringify({ answer: d.body.answer })));
       assert.equal((await admin.query("SELECT answer FROM lore_contributions WHERE id=$1", [d.intent.contributionId])).rows[0].answer, d.body.answer);
       assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "paid");
     };
@@ -215,6 +215,33 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     await fulfillCheckout(String(session.id));
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 200);
     assert.equal(await claimJob(), null);
+  });
+  await t.test("optional public handles follow authenticated funding and edits update Discussion", async () => {
+    const owner = await user(1);
+    const other = await user();
+    await admin.query("UPDATE users SET name='Private billing name' WHERE id=$1", [owner]);
+    assert.equal((await profileEndpoint(request({ handle: "Forged", userId: owner }))).status, 401);
+    assert.equal((await profileEndpoint(new Request("http://localhost:3000/api/account/profile", { method: "POST", headers: { origin: "https://elsewhere.example" }, body: JSON.stringify({ handle: "Forged" }) }))).status, 403);
+    await savePublicHandle(other, "Another reader");
+    const d = await draft("The public library moves each winter.");
+    await db.transaction(tx => reserveCredit(tx, d.intent, owner));
+    const job = await claimJob(); assert.ok(job);
+    await runJob(job);
+    const article = (await admin.query("SELECT id FROM articles WHERE wiki='world' AND slug=$1", [d.intent.slug])).rows[0];
+    let rows = await discussionContributions(article.id);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].handle, null);
+    assert.ok(!JSON.stringify(rows).includes("Private billing name"));
+    await savePublicHandle(owner, "  River reader  ");
+    rows = await discussionContributions(article.id);
+    assert.equal(rows[0].handle, "River reader");
+    await savePublicHandle(owner, "New name");
+    assert.equal((await discussionContributions(article.id))[0].handle, "New name");
+    await assert.rejects(savePublicHandle(owner, "x".repeat(51)));
+    assert.equal((await discussionContributions(article.id))[0].handle, "New name");
+    await savePublicHandle(owner, "");
+    assert.equal((await discussionContributions(article.id))[0].handle, null);
+    assert.equal((await admin.query("SELECT handle FROM users WHERE id=$1", [other])).rows[0].handle, "Another reader");
   });
   await t.test("account switching starts a separate credit checkout and retries reuse one order", async () => {
     const firstUser = await user(); const secondUser = await user();

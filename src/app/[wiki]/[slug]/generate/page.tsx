@@ -1,9 +1,8 @@
-import { WikiArticleContent } from "@/components/wiki-article-content";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import path from "node:path";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { articlePath, titleFromSlug, wikiPath } from "@/lib/wiki";
 import { readWikiDefinition } from "@/lib/wiki-files";
 
@@ -48,7 +47,7 @@ export default async function GeneratePage({
 
   const title = query.title?.trim() || titleFromSlug(slug);
 
-  const [existingArticles, { mainPageSlug }, [sourceArticle]] = await Promise.all([
+  const [existingArticles, { mainPageSlug }] = await Promise.all([
     db
       .select({
         slug: articles.slug,
@@ -57,7 +56,6 @@ export default async function GeneratePage({
       .from(articles)
       .where(eq(articles.wiki, wiki)),
     readWikiDefinition(path.join(process.cwd(), "wiki-files"), wiki),
-    db.select().from(articles).where(and(eq(articles.wiki, wiki), eq(articles.slug, sourceSlug))).limit(1),
   ]);
 
   const existingArticleSlugs = existingArticles.map((article) => article.slug);
@@ -107,13 +105,7 @@ export default async function GeneratePage({
               sourceSlug={sourceSlug}
               initialIntentId={query.intent}
               existingArticleSlugs={existingArticleSlugs}
-            >
-              {sourceArticle && !sourceArticle.slug.startsWith("stub-") && (
-                <article className="wiki-lore-source">
-                  <WikiArticleContent wiki={wiki} article={sourceArticle} existingSlugs={new Set(existingArticleSlugs)} />
-                </article>
-              )}
-            </PrepareArticle>
+            />
           </div>
         </main>
       </div>

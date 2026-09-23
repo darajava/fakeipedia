@@ -57,7 +57,7 @@ export async function runJob(job: Job) {
     const [intent] = await db.select().from(generationIntents).where(eq(generationIntents.id, job.intentId));
     if (!intent) throw new Error("The saved article request is unavailable.");
     const [contribution] = intent.contributionId ? await db.select().from(loreContributions).where(eq(loreContributions.id, intent.contributionId)) : [];
-    if (intent.answer && (!contribution || contribution.question !== intent.question || contribution.answer !== intent.answer)) throw new Error("The saved contribution is unavailable.");
+    if (intent.answer && (!contribution || contribution.answer !== intent.answer)) throw new Error("The saved contribution is unavailable.");
     const response = await generateArticleRequest(new Request("http://worker.internal/generate", {
       method: "POST", body: JSON.stringify({ wiki: intent.wiki, slug: intent.slug, title: intent.title, sourceSlug: intent.sourceSlug }),
     }), { contribution, onSaved: (tx, article) => completeJob(tx, job, article.id) });
