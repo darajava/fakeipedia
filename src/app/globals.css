@@ -81,23 +81,6 @@ a {
   margin-inline-start: auto;
 }
 
-.credits-link,
-.credits-link:visited {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 8px;
-  border-radius: 4px;
-  color: var(--wiki-muted);
-  font: 14px Arial, Helvetica, sans-serif;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.credits-link:hover { background: var(--wiki-tab-background); color: var(--wiki-text); }
-.credits-link:focus-visible { outline: 2px solid var(--wiki-link); outline-offset: 3px; }
-
 .theme-toggle {
   display: inline-flex;
   align-items: center;

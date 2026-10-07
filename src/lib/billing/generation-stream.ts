@@ -5,7 +5,7 @@ import { generationJobs } from "../../db/schema";
 import { generationPreviewComplete } from "../generation-progress";
 import { generationDeltaPackets, type GenerationDelta, type GenerationLiveMessage } from "../generation-live";
 import { requireUuid } from "./config";
-import type { Job } from "./credits";
+import type { Job } from "./jobs";
 
 // Listening connections must not compete with queries that fund or save articles.
 export const generationStreamPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 20, connectionTimeoutMillis: 5000, idleTimeoutMillis: 1000 });

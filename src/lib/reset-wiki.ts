@@ -48,7 +48,8 @@ export async function resetWiki(directory: string, resetDatabase: () => Promise<
     return plan;
   }
 
-  const stagingDirectory = await mkdtemp(path.join(path.dirname(path.resolve(directory)), ".wiki-reset-"));
+  // Keep staging on the mounted wiki volume; rename cannot cross filesystems.
+  const stagingDirectory = await mkdtemp(path.join(path.resolve(directory), ".wiki-reset-"));
   const staged: Array<{ original: string; temporary: string }> = [];
 
   try {

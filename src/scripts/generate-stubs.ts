@@ -24,6 +24,7 @@ async function main() {
 
   const { db } = await import("../db");
   const { articles } = await import("../db/schema");
+  const { articleLockPool } = await import("../lib/article-lock");
   try {
     // Refresh briefs from disk and restore any existing target files before generating.
     await db.transaction(async (tx) => {
@@ -36,11 +37,13 @@ async function main() {
         if (saved) await tx.insert(articles).values(saved).onConflictDoNothing();
       }
     });
-    const { POST } = await import("../app/api/articles/generate/route");
-    const result = await generateStubPages(plan, POST);
+    // This is an operator-only CLI. Public generation remains payment-gated.
+    const { generateArticleRequest } = await import("../lib/article-generation");
+    const result = await generateStubPages(plan, generateArticleRequest);
     console.log(`Finished: ${result.generated} generated, ${result.skipped} skipped, ${result.failed} failed.`);
     if (result.failed) process.exitCode = 1;
   } finally {
+    await articleLockPool.end();
     await db.$client.end();
   }
 }

@@ -12,6 +12,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
+// Historical billing records: retained for existing orders and in-flight settlement only.
+// No account creation, credit purchases, or new credit reservations are exposed.
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
 
@@ -94,7 +96,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: integer("user_id").references(() => users.id, { onDelete: "restrict" }),
   intentId: uuid("intent_id").references(() => generationIntents.id, { onDelete: "restrict" }),
-  // Account-only purchases use their own client request identifier.
+  // Persisted request identifier keeps checkout retries idempotent.
   requestId: uuid("request_id").notNull().unique(),
   kind: text("kind").$type<"article" | "credits">().notNull(),
   status: text("status").$type<"pending" | "paid" | "refund_pending" | "refunded" | "cancelled">().notNull().default("pending"),

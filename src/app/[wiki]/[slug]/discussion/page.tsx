@@ -41,7 +41,7 @@ export default async function DiscussionPage({ params }: Props) {
           {contributions.length === 0 && <p>{article ? "No reader contribution was used to generate this article." : "This article has not been generated yet."}</p>}
           {contributions.map((contribution) => <section className="wiki-lore-contribution" key={contribution.id}>
             <p className="wiki-lore-answer">{contribution.answer}</p>
-            <p className="wiki-subtitle">{contribution.handle || "Anonymous reader"} · <time dateTime={contribution.createdAt.toISOString()}>{contribution.createdAt.toLocaleDateString("en-IE", { dateStyle: "long", timeZone: "UTC" })}</time><br />
+            <p className="wiki-subtitle">Anonymous reader · <time dateTime={contribution.createdAt.toISOString()}>{contribution.createdAt.toLocaleDateString("en-IE", { dateStyle: "long", timeZone: "UTC" })}</time><br />
               From {contribution.sourceArticleId ? <Link href={articlePath(wiki, contribution.sourceSlug)}>{contribution.sourceTitle}</Link> : contribution.sourceTitle}
             </p>
           </section>)}

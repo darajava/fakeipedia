@@ -1,62 +1,66 @@
-# Article purchases and credits
+# $1.50 / £1.50 / €1.50 article purchases
 
-Reading and article preparation remain public. The generation endpoint only queues a paid article request or atomically reserves an account credit. The model is called by the database worker, never by a browser request.
+Reading is free. Each red article costs a single $1.50, £1.50 or €1.50 payment to generate, including its images. There are no accounts, sign-in, credit purchases, or bundles. The finished article is public and contributions appear as “Anonymous reader”.
 
-On the article preparation page, **Generate article** saves the contribution and tries to use one account credit. Readers with an available credit immediately enter the live article preview, where text and images appear as they are generated. Paid checkout also returns to this preview. Guests, readers without credits, and drafts with a pending checkout continue to the payment step. Refreshing the generation view resumes from its persisted preview without spending another credit.
+Currency is selected from the visitor's IP address: GBP for GB, EUR for euro users, and USD elsewhere. On Railway, use the ingress-provided `X-Real-IP`; `X-Forwarded-For`'s first address is a fallback for other proxies. The server performs IPv4/IPv6 country lookups locally with `geoip-country`, without sending visitor IPs to another service. Browser language, client currency values, and country hints do not select the currency. Missing, private, invalid or unknown IPs default to USD. The preparation page, payment status and new checkout all use the same lookup. An existing pending checkout retains its saved amount and currency even if the visitor's IP changes. These are fixed prices, not exchange-rate conversions. Previously opened 1.00 article checkouts are still honored; only new checkouts use 1.50.
 
-Migration `0005` adds a generation preview snapshot to jobs. The worker pushes each model chunk through PostgreSQL LISTEN/NOTIFY to an authorized streaming response, with proxy buffering and compression disabled. Checkpoints are still saved about every 400ms for recovery; they no longer control the visible update rate. New connections subscribe before reading their checkpoint, and offset-based updates prevent duplicate or regressing text. Image completion is pushed immediately. No extra service or migration is needed for live streaming. Text still commits and consumes the credit before optional images finish, while the live preview stays open until the image pass completes. A stopped worker cannot strand an already-saved article: an inactive preview falls back to the article after two minutes. Restart the worker after deploying this change.
+The country database ships with the pinned `geoip-country` dependency. Refresh it regularly with `npm install --save-exact geoip-country@latest`, commit the package and lockfile changes, and redeploy. Next.js keeps the package external so its database files remain available at runtime. This product includes GeoLite2 Data created by [MaxMind](https://www.maxmind.com/), distributed through [geoip-country](https://github.com/sapics/geoip-country); see the package's LICENSE and EULA.
 
-## Local setup and Stripe test mode
+The preparation page saves the optional answer and opens the payment page. Only verified Stripe fulfillment queues generation. Private purchase tokens authorize status, cancellation, and live previews; they are retained in browser storage and recovery URL fragments, never query parameters. Successful billing API responses use `{ result: ... }`.
 
-1. Copy the payment settings from `.env.example` into your local environment. Keep existing database and model keys. Set `APP_URL=http://localhost:3000`.
-2. Create a Clerk application. In its authentication settings, enable email verification **links** for sign-in and sign-up (and disable unwanted password/social strategies). Account forms are embedded on this site at `/auth/sign-up` and `/auth/sign-in`; `/auth` defaults to account creation. The provider and middleware configure these local paths in code. Switching forms preserves the validated payment/account return destination. Add your local and production return URLs in Clerk. Configure `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. The publishable key must be present during the Next.js build as well as at runtime. Only a verified primary email can link a Clerk identity to a local user; billing names/emails are never used as public attribution.
-3. In Stripe **test mode**, create two one-time, fixed, positive-price products: one article and one credit pack. Set their Price IDs, your test secret key, and `CREDIT_PACK_QUANTITY`. Pack quantity is server-side; each Checkout line item has quantity 1. Prices and currency come from Stripe, not from the browser. Do not attach adjustable quantities or discounts. Amounts are a launch decision.
-4. Run `npm run db:migrate`, then `npm run dev` and `npm run worker` in separate terminals. Production `npm start` supervises both processes together.
-5. Forward Stripe events to `http://localhost:3000/api/billing/webhook` using `stripe listen --forward-to localhost:3000/api/billing/webhook`. Set its displayed signing secret as `STRIPE_WEBHOOK_SECRET` and restart the web server. Subscribe to `checkout.session.completed` and `checkout.session.async_payment_succeeded` in the deployed webhook endpoint.
-6. Set `BILLING_ENABLED=true`. Keep `STRIPE_ALLOW_LIVE=false`. Visit a red link, save an optional answer, and complete Stripe test Checkout. The test card `4242 4242 4242 4242` with a future expiry can be used in test mode. Confirm the article, Discussion contribution, order, job, and credit ledger before launch. Test a declined card and cancel checkout too.
+## Setup
 
-Official references: [Stripe Checkout fulfillment](https://docs.stripe.com/checkout/fulfillment), [Stripe testing](https://docs.stripe.com/testing), [Clerk authentication settings](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options), [Clerk Next.js setup](https://clerk.com/docs/nextjs/getting-started/quickstart).
+1. Apply existing migrations with `npm run db:migrate` and configure the database and generation providers in `.env.example`.
+2. Create an active, one-time, per-unit Stripe Price with **USD, GBP and EUR**, each priced at **150 minor units ($1.50 / £1.50 / €1.50)**, with no quantity transformation. Use Stripe’s [manual currency prices](https://docs.stripe.com/payments/checkout/localize-prices/manual-currency-prices) to add USD and GBP currency options to an existing €1.50 Price, or create a new multi-currency Price. Set `STRIPE_ARTICLE_PRICE_ID` to its ID. The server expands and validates the selected currency; missing or incorrectly priced options prevent checkout in that currency.
+3. Configure `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `APP_URL`. Use Stripe test mode and `http://localhost:3000` locally. Forward `checkout.session.completed` and `checkout.session.async_payment_succeeded` to `/api/billing/webhook`.
+4. Set `BILLING_ENABLED=true`, keeping `STRIPE_ALLOW_LIVE=false` during testing. Checkout fixes quantity at one, disables adaptive pricing, automatic tax additions, promotion codes, and Managed Payments, and charges exactly $1.50, £1.50 or €1.50 in the selected currency.
+5. Run `npm run dev` and `npm run worker`. Production `npm start` starts both processes; Railway should run `npm run db:migrate` before deployment and retain `/app/wiki-files` on its persistent volume. Restart both processes when deploying.
 
-## Railway
+Authentication keys and credit-pack settings are no longer required. No destructive migration is needed for this change: historical account and ledger tables remain for financial records and settlement of jobs already funded before deployment. No endpoint can create users, buy credits, or reserve a new credit. Already funded legacy jobs can finish; retired pending checkouts that complete for a bundle or an old article price are refunded automatically and do not queue new generation. Historical unused balances remain recorded for operational reconciliation.
 
-Commit all migrations, including `drizzle/meta`, before deploying. In the app service's **Settings → Deploy**, set **Pre-deploy command** to `npm run db:migrate` and **Start command** to `npm start`. Drizzle and the worker's TypeScript runtime are production dependencies. Pre-deploy migrations only need `DATABASE_URL`; they do not access the persistent volume. See [Railway pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command).
+### Switching to live payments
 
-Set these commands in the service settings: Railway's current documentation deprecates adding new `railway.json` / `railway.toml` configuration. This change does not replace your existing deployment or infrastructure configuration. See [Railway configuration guidance](https://docs.railway.com/config-as-code).
+1. Activate the Stripe account and switch the Dashboard to live mode. Test-mode products, prices and keys cannot be used for live payments.
+2. In **Product catalog**, open or create the article product. Add a **one-time** price for €1.50 and add USD $1.50 and GBP £1.50 as currency options on that same Price. Copy its `price_...` ID. Create a new price for the increase from 1.00; changing an existing Price's base amount through the API is not supported.
+3. In **Workbench → Webhooks**, create an event destination for **Your account**, with **Snapshot** payloads and these events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`. Set the endpoint to `https://YOUR_DOMAIN/api/billing/webhook`. Copy this live endpoint's `whsec_...` signing secret, not a local Stripe CLI secret.
+4. Set the following on the production Railway service (and on a separately deployed worker, if applicable):
 
-Use **one replica**, with a persistent volume mounted at `/app/wiki-files`. Both Next.js and the worker run in the same container and use the same files. Set the application's `DATABASE_URL` to the Railway PostgreSQL reference. Set `APP_URL` to the canonical HTTPS origin, configure Clerk's production keys/allowed URLs, and configure Stripe's webhook at `https://YOUR_HOST/api/billing/webhook`.
+   ```dotenv
+   APP_URL=https://YOUR_DOMAIN
+   STRIPE_SECRET_KEY=rk_live_YOUR_KEY
+   STRIPE_ARTICLE_PRICE_ID=price_YOUR_LIVE_PRICE
+   STRIPE_WEBHOOK_SECRET=whsec_YOUR_LIVE_ENDPOINT_SECRET
+   STRIPE_ALLOW_LIVE=true
+   BILLING_ENABLED=true
+   ```
 
-First deploy with test-mode Stripe prices and keys. After the end-to-end checklist passes, replace them with live-mode prices, secret key and webhook secret, set the intended pack quantity, and explicitly set `STRIPE_ALLOW_LIVE=true`. `BILLING_ENABLED=false` disables new Stripe checkout; existing credits and already queued jobs can still run. Payment verification and refunds continue while checkout is disabled, using the configured Stripe key. Do not remove that key or treat disabling checkout as a worker pause.
+   `STRIPE_SECRET_KEY` also accepts an existing `sk_live_...` key. For restricted keys, use the permissions below. Keep local development on test keys.
+5. Deploy the updated code and variables together. Apply database migrations and ensure the generation worker is running; `npm start` launches both the web app and worker. Verify checkout shows 1.50 in the expected currency, then confirm a real purchase delivers a successful webhook and starts generation.
 
-## Records and recovery
+See Stripe's [price setup](https://docs.stripe.com/products-prices/manage-prices), [live API keys](https://docs.stripe.com/keys) and [webhook setup](https://docs.stripe.com/webhooks).
 
-- `generation_intents`: immutable title, target/source, optional reader direction. A 256-bit browser capability protects a guest draft; only its hash is stored in PostgreSQL. The private purchase link includes the capability in the URL fragment, which is not sent in HTTP requests/referrers. Guests should bookmark that link; their browser also remembers it. Do not share it.
-- `purchase_orders`: server-selected price/currency/pack amount and Stripe references. Guest purchases have no required account. Account orders and jobs require their authenticated owner and can be resumed from the account page on another device. Guest purchases are not automatically transferred to accounts.
-- `credit_accounts` and `credit_transactions`: balances, reservations and an append-only ledger. SQL enforces nonnegative balances. A conditional update reserves a credit; the article save transaction consumes it. Duplicate payment events cannot grant credits twice.
-- `generation_jobs`: one job per saved intent. Row locks and two-minute leases provide durable claims. A heartbeat renews the lease every 20 seconds. A worker killed during generation is recovered after its lease expires. At most three generation attempts run; lock contention with another writer does not consume an attempt. Stale workers cannot commit article text after losing their lease.
-- Article text, successful contribution attribution, job completion and credit consumption commit together. Images run afterward. Their failures never refund or discard completed text; the existing missing-image retry remains available.
-- A stale red link or a terminal failure releases a credit or records a refund request. The worker processes refunds independently every 30 seconds using a stable Stripe idempotency key. Pending refunds remain visible until Stripe confirms success. `refund_error` records failures for operational attention; investigate errors in Stripe rather than issuing an unrelated second refund.
-- Signed webhooks are the primary fulfillment mechanism. The account and payment pages also check accessible pending purchases with Stripe while polling, so returning from checkout updates the balance even if webhook delivery is delayed. These checks are throttled per order. The worker reconciles pending sessions independently. Returning from checkout never grants funds without server-side Stripe verification.
-- Content reset preserves accounts, purchases, ledgers, jobs and draft snapshots. It refuses to run while payments/refunds or generation are pending. Deleting an article clears its job reference without deleting financial history.
+### Restricted API keys
 
-### Interrupted checkout creation
+`STRIPE_SECRET_KEY` accepts both secret (`sk_test_` / `sk_live_`) and restricted (`rk_test_` / `rk_live_`) API keys. Both live key types require `STRIPE_ALLOW_LIVE=true`.
 
-If session creation returns an uncertain response, retry the same saved purchase. Its persisted order ID is the Stripe idempotency key. For requests older than 23 hours without a stored session ID, the application refuses to create another session: inspect Stripe using the order ID (`client_reference_id` / metadata), reconcile the session ID into the order, and then fulfill or cancel it. This deliberately avoids relying on a potentially expired Stripe idempotency key.
+Based on this app's API calls, configure a restricted key with Prices: Read, Checkout Sessions: Write (includes Read), and Refunds: Write (includes Read). Verify these permissions in Stripe's sandbox, including expanded checkout line items and refund recovery; Stripe errors identify any additional resource permissions required. Webhook signatures use the separate `STRIPE_WEBHOOK_SECRET` (`whsec_...`); the app does not create webhook endpoints through the API.
 
-### Operational checks
+## Recovery
 
-Check queued/running jobs, pending refunds and pending checkout sessions after deployment or provider outages. A refund with `refund_error` may require intervention; do not mark it refunded before verifying Stripe. Keep backups of PostgreSQL and the persistent volume. Never run the content reset while the worker is processing articles.
+Saved intents retain the answer before checkout. Repeated checkout requests reuse the pending order and Stripe idempotency key. Visiting a success URL never authorizes generation: signed webhooks, private payment polling, and worker reconciliation all verify the Stripe session against the saved order.
+
+The worker claims jobs with row locks and two-minute leases, renews leases every 20 seconds, and retries interrupted work up to three times. Stale workers cannot commit. Text and contribution persistence commit with job completion; images run afterward and optional image failure does not discard a completed article.
+
+A stale red link or terminal generation failure queues a refund. Refund reconciliation uses persisted Stripe references and idempotency keys to avoid issuing duplicate refunds. A refund error remains recorded for operational attention. Keep database and article-volume backups.
+
+For an uncertain checkout creation older than 23 hours without a stored session ID, inspect Stripe using the saved order ID before retrying. The app refuses to create another session with a potentially expired idempotency key.
 
 ## Verification
 
-`npm test` runs the normal suite. Database integration tests use a disposable PostgreSQL schema and temporary article directory, leaving normal articles and balances untouched:
+`npm test` runs the unit suite. The database integration suite creates a disposable schema and temporary article directory:
 
 ```sh
 BILLING_TEST_DATABASE_URL=postgresql://... node --import tsx --test src/lib/billing-integration.test.ts
-LORE_TEST_DATABASE_URL=postgresql://... node --import tsx --test src/lib/lore-integration.test.ts
 ```
 
-The integration suite simulates Stripe and model responses. It does not replace testing hosted Clerk login and Stripe Checkout with your real **test-mode** configuration. Before enabling live mode, verify guest success/cancellation, email-link sign-in, a credit pack, credit spending, preserved answers after authentication failure, browser closure, worker interruption, refund recovery, and Discussion attribution.
-
-Article preparation uses a fixed optional prompt. No question-generation API call or question storage is used. Apply migration `0006_remove_article_questions` with the release; it removes the old question cache and question columns while preserving reader answers and purchase requests.
-
-Signup finishes at `/auth/complete`, where readers may choose a public name or handle or skip straight to their saved payment/account destination. The same field is editable on Account. Public handles are stored separately from private names and email addresses; Discussion joins the completed generation request to its authenticated funding account and uses the current handle. Blank handles and guest purchases display “Anonymous reader”. Apply migration `0007_public_handles` with this release.
+Stripe and generation providers are simulated in integration tests. Separately verify hosted test-mode Checkout success, cancellation, declined payment, browser closure, webhook retries, and refund recovery before enabling live payments with `STRIPE_ALLOW_LIVE=true`.

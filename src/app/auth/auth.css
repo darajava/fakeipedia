@@ -1,6 +1,0 @@
-.auth-page { width: min(100% - 2rem, 56rem); margin: 2.5rem auto 5rem; color: var(--wiki-text); }
-.auth-nav { display: flex; align-items: center; gap: 1rem; margin-bottom: 3rem; }
-.auth-nav > a, .auth-nav > a:visited { font: 28px Georgia, "Times New Roman", serif; color: var(--wiki-text); text-decoration: none; }
-.auth-form { width: min(100%, 28rem); margin: 0 auto; min-height: 28rem; }
-.auth-page :focus-visible { outline: 2px solid var(--wiki-link); outline-offset: 3px; }
-@media (max-width: 600px) { .auth-page { margin-top: 1.25rem; } .auth-nav { margin-bottom: 2rem; } }

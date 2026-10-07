@@ -1,7 +1,6 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { CreditsLink } from "./credits-link";
 
 const storageKey = "fakeipedia-theme";
 
@@ -43,7 +42,6 @@ export function ThemeToggle() {
 
   return (
     <div className="header-actions">
-      <CreditsLink />
       <button type="button" className="theme-toggle" aria-label="Dark mode" title={dark ? "Switch to light mode" : "Switch to dark mode"} aria-pressed={dark} onClick={toggle}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
           <path d="M20.5 13.2A8.6 8.6 0 0 1 10.8 3.5a8.6 8.6 0 1 0 9.7 9.7Z" />

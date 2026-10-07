@@ -1,12 +1,12 @@
 "use client";
 
+import { articlePriceLabel, type ArticleCurrency } from "@/lib/article-pricing";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { articlePath } from "@/lib/wiki";
 import {
   billingFetch,
   purchaseToken,
-  startCreditGeneration,
 } from "@/components/billing-client";
 import { GenerateArticle } from "./generate-article";
 
@@ -18,6 +18,7 @@ type Submission = {
 };
 
 export function PrepareArticle(props: {
+  currency: ArticleCurrency;
   wiki: string;
   slug: string;
   title: string;
@@ -103,7 +104,7 @@ export function PrepareArticle(props: {
     setSubmitting(true);
     setError(undefined);
     try {
-      // Keep the capability through hosted sign-in/checkout. The answer itself is
+      // Keep the capability through checkout. The answer itself is
       // stored on the server before leaving this page.
       try {
         localStorage.setItem(`purchase:${next.requestId}`, token);
@@ -117,17 +118,6 @@ export function PrepareArticle(props: {
       );
       if (result.exists) {
         router.replace(articlePath(wiki, slug));
-        return;
-      }
-      const job = await startCreditGeneration(result.id, token);
-      if (job) {
-        const started = { ...next, generating: true };
-        setSubmission(started);
-        storeDraft(answer, started);
-        setGeneration({ id: result.id, token });
-        router.replace(
-          `${articlePath(wiki, slug)}/generate?title=${encodeURIComponent(title)}&source=${encodeURIComponent(sourceSlug)}&intent=${result.id}#token=${token}`,
-        );
         return;
       }
       router.push(`/payment?intent=${result.id}#token=${token}`);
@@ -167,7 +157,7 @@ export function PrepareArticle(props: {
           {error && <p role="alert">{error}</p>}
           <label htmlFor="lore-answer" className="wiki-lore-question">
             Optionally: in a few words say how {title} fits into this world.
-            This will help guide the article's content.
+            This will help guide the article’s content.
           </label>
           <textarea
             id="lore-answer"
@@ -189,7 +179,7 @@ export function PrepareArticle(props: {
           </p>
           <div className="wiki-lore-actions">
             <button type="button" onClick={begin} disabled={submitting}>
-              {submitting ? "Preparing your article…" : `Generate ${title}`}
+              {submitting ? "Preparing your article…" : `Continue — ${articlePriceLabel(props.currency)}`}
             </button>
           </div>
         </section>

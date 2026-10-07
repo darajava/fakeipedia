@@ -2,7 +2,7 @@ import { and, eq, lt, or, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { articles, generationIntents, generationJobs, loreContributions } from "../../db/schema";
 import { generateArticleRequest } from "../article-generation";
-import { completeJob, releaseFunding, type Job } from "./credits";
+import { completeJob, releaseFunding, type Job } from "./jobs";
 import { applyGenerationEvent, emptyGenerationProgress, type GenerationEvent, type GenerationProgress } from "../generation-progress";
 import { notifyGeneration } from "./generation-stream";
 

@@ -1,39 +1,34 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { db } from "../../db";
-import { articles, creditAccounts, creditTransactions, generationIntents, generationJobs, purchaseOrders } from "../../db/schema";
-import { BillingError, billingConfig, requireUuid, stripeClient } from "./config";
-import { reserveCredit } from "./credits";
+import { articles, generationIntents, generationJobs, purchaseOrders } from "../../db/schema";
+import { BillingError, billingConfig, requireUuid, stripeClient, validateArticlePrice } from "./config";
 import type { Intent } from "./intents";
+import { ARTICLE_PRICE_AMOUNT, isArticleOrder, isArticleCurrency, type ArticleCurrency } from "../article-pricing";
 
 let cachedPrices: { key: string; expiresAt: number; value: Promise<Awaited<ReturnType<typeof loadPrices>>> } | undefined;
-export async function prices() {
+export async function prices(currency: ArticleCurrency) {
   const config = billingConfig();
-  const key = [config.secret, config.articlePrice, config.packPrice, config.packQuantity].join(":");
+  const key = [config.secret, config.articlePrice].join(":");
   if (!cachedPrices || cachedPrices.key !== key || cachedPrices.expiresAt < Date.now()) {
     const value = loadPrices();
     cachedPrices = { key, expiresAt: Date.now() + 60000, value };
     void value.catch(() => { if (cachedPrices?.value === value) cachedPrices = undefined; });
   }
-  return cachedPrices.value;
+  const article = await cachedPrices.value;
+  validateArticlePrice(article, currency);
+  return { article: { id: article.id, amount: ARTICLE_PRICE_AMOUNT, currency } };
 }
 async function loadPrices() {
   const config = billingConfig();
   const stripe = stripeClient();
-  const [article, pack] = await Promise.all([stripe.prices.retrieve(config.articlePrice), stripe.prices.retrieve(config.packPrice)]);
-  for (const price of [article, pack]) {
-    if (!price.active || price.type !== "one_time" || !price.unit_amount || price.billing_scheme !== "per_unit") throw new BillingError("Payment prices are not configured correctly.", 503);
-  }
-  return { article: { id: article.id, amount: article.unit_amount!, currency: article.currency }, pack: { id: pack.id, amount: pack.unit_amount!, currency: pack.currency, credits: config.packQuantity } };
+  return stripe.prices.retrieve(config.articlePrice, { expand: ["currency_options"] });
 }
 
-export async function createCheckout(kind: "article" | "credits", intent: Intent | null, userId: number | null, requestId: unknown) {
-  if (kind === "credits" && !userId) throw new BillingError("Sign in to buy credits.", 401);
-  if (kind === "article" && !intent) throw new BillingError("Choose an article first.");
+export async function createCheckout(intent: Intent, requestId: unknown, currency: ArticleCurrency = "usd") {
   const idempotencyId = requireUuid(requestId);
-  const catalog = await prices();
-  const price = kind === "article" ? catalog.article : catalog.pack;
+  if (!isArticleCurrency(currency)) throw new BillingError("Unsupported payment currency.");
   const stripe = stripeClient();
   const order = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`checkout-request:${idempotencyId}`}, 0))`);
@@ -42,20 +37,21 @@ export async function createCheckout(kind: "article" | "credits", intent: Intent
       const [job] = await tx.select().from(generationJobs).where(eq(generationJobs.intentId, intent.id));
       if (job) throw new BillingError("This article request has already been funded.", 409);
       const [existingArticle] = await tx.select({ id: articles.id }).from(articles).where(and(eq(articles.wiki, intent.wiki), eq(articles.slug, intent.slug))).limit(1);
-      if (existingArticle && kind === "article") throw new BillingError("This article is already available. No payment is needed.", 409);
+      if (existingArticle) throw new BillingError("This article is already available. No payment is needed.", 409);
       const [pending] = await tx.select().from(purchaseOrders).where(and(eq(purchaseOrders.intentId, intent.id), eq(purchaseOrders.status, "pending"))).limit(1);
       if (pending) {
-        if ((pending.userId !== null && pending.userId !== userId) || pending.kind !== kind) throw new BillingError("Cancel your previous checkout before choosing a different payment option.", 409);
+        if (!isArticleOrder(pending)) throw new BillingError("Cancel your previous checkout before starting an article purchase.", 409);
         return pending;
       }
     }
     const [previous] = await tx.select().from(purchaseOrders).where(eq(purchaseOrders.requestId, idempotencyId));
     if (previous) {
-      if (previous.userId !== userId || previous.kind !== kind || previous.intentId !== (intent?.id ?? null)) throw new BillingError("This payment request belongs to another purchase.", 409);
+      if (!isArticleOrder(previous) || previous.intentId !== intent.id) throw new BillingError("This payment request belongs to another purchase.", 409);
       if (previous.status !== "pending") throw new BillingError("This purchase has already been processed.", 409);
       return previous;
     }
-    const [created] = await tx.insert(purchaseOrders).values({ id: randomUUID(), userId, intentId: intent?.id, requestId: idempotencyId, kind, priceId: price.id, amount: price.amount, currency: price.currency, creditQuantity: kind === "credits" ? catalog.pack.credits : 0 }).returning();
+    const { article: price } = await prices(currency);
+    const [created] = await tx.insert(purchaseOrders).values({ id: randomUUID(), intentId: intent.id, requestId: idempotencyId, kind: "article", priceId: price.id, amount: price.amount, currency: price.currency }).returning();
     return created;
   });
   // Idempotency is tied to the persisted order, not to a browser tab or redirect.
@@ -66,7 +62,7 @@ export async function createCheckout(kind: "article" | "credits", intent: Intent
       return { pending: true };
     }
     if (session.status === "expired") {
-      throw new BillingError("This checkout expired. Cancel it here to choose a new payment option.", 409);
+      throw new BillingError("This checkout expired. Cancel it here to start again.", 409);
     }
     if (session.url) return { url: session.url };
   }
@@ -75,13 +71,14 @@ export async function createCheckout(kind: "article" | "credits", intent: Intent
     // session for an old ambiguous request. Cancellation/reconciliation handles it.
     throw new BillingError("This checkout needs to be cancelled before starting again.", 409);
   }
-  const returnPath = intent ? `/payment?intent=${intent.id}` : `/account?order=${order.id}`;
+  const returnPath = `/payment?intent=${intent.id}`;
   const origin = billingConfig().origin;
   const session = await stripe.checkout.sessions.create({
     mode: "payment", payment_method_types: ["card"],
     // Keep standard Checkout even when the Stripe account defaults to Managed Payments.
     managed_payments: { enabled: false },
     currency: order.currency, adaptive_pricing: { enabled: false },
+    automatic_tax: { enabled: false }, allow_promotion_codes: false,
     line_items: [{ price: order.priceId, quantity: 1 }],
     client_reference_id: order.id, metadata: { orderId: order.id },
     payment_intent_data: { metadata: { orderId: order.id } },
@@ -89,7 +86,7 @@ export async function createCheckout(kind: "article" | "credits", intent: Intent
     cancel_url: `${origin}${returnPath}&checkout=cancelled`,
   }, { idempotencyKey: `checkout:${order.id}` }).catch(async (error: unknown) => {
     // A definite API rejection created no session. Release that pending checkout
-    // so the reader can retry or choose credits. Network/5xx outcomes stay pending
+    // so the reader can retry. Network/5xx outcomes stay pending
     // and are recovered using the same idempotency key.
     if (error instanceof Stripe.errors.StripeInvalidRequestError || error instanceof Stripe.errors.StripeAuthenticationError || error instanceof Stripe.errors.StripePermissionError) {
       await db.update(purchaseOrders).set({ status: "cancelled" }).where(and(eq(purchaseOrders.id, order.id), eq(purchaseOrders.status, "pending")));
@@ -125,31 +122,27 @@ export async function fulfillCheckout(sessionId: string) {
     if (order.status !== "pending") return;
     const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent!.id;
     await tx.update(purchaseOrders).set({ status: "paid", paidAt: new Date(), stripeSessionId: session.id, stripePaymentIntentId: paymentIntentId }).where(eq(purchaseOrders.id, order.id));
-    if (order.kind === "credits") {
-      await tx.insert(creditAccounts).values({ userId: order.userId!, balance: order.creditQuantity }).onConflictDoUpdate({ target: creditAccounts.userId, set: { balance: sql`${creditAccounts.balance} + ${order.creditQuantity}` } });
-      await tx.insert(creditTransactions).values({ userId: order.userId!, orderId: order.id, key: `purchase:${order.id}`, delta: order.creditQuantity, reason: "Credit pack purchased" });
-      if (intent) {
-        const [job] = await tx.select().from(generationJobs).where(eq(generationJobs.intentId, intent.id));
-        const [article] = await tx.select({ id: articles.id }).from(articles).where(and(eq(articles.wiki, intent.wiki), eq(articles.slug, intent.slug))).limit(1);
-        if (!job && !article) await reserveCredit(tx, intent, order.userId!);
-      }
+    if (!isArticleOrder(order)) {
+      // Retired checkouts may still complete after deployment. Refund them;
+      // they must never grant a bundle or queue a differently priced article.
+      await tx.update(purchaseOrders).set({ status: "refund_pending" }).where(eq(purchaseOrders.id, order.id));
     } else {
       if (!intent) throw new Error("Article purchase has no saved draft.");
       const [job] = await tx.select().from(generationJobs).where(eq(generationJobs.intentId, intent.id));
       if (job) {
-        // Another checkout or a credit funded this draft first. Never charge twice.
+        // Another checkout funded this draft first. Never charge twice.
         await tx.update(purchaseOrders).set({ status: "refund_pending" }).where(eq(purchaseOrders.id, order.id));
       } else {
-        await tx.insert(generationJobs).values({ intentId: intent.id, orderId: order.id, userId: order.userId, funding: "article" });
+        await tx.insert(generationJobs).values({ intentId: intent.id, orderId: order.id, funding: "article" });
       }
     }
   });
 }
 
-export async function cancelCheckout(intentId: string | null, userId: number | null, orderId?: unknown) {
-  const rows = await db.select().from(purchaseOrders).where(intentId ? eq(purchaseOrders.intentId, intentId) : eq(purchaseOrders.id, requireUuid(orderId)));
+export async function cancelCheckout(intentId: string) {
+  const rows = await db.select().from(purchaseOrders).where(eq(purchaseOrders.intentId, intentId));
   for (const order of rows) {
-    if ((order.userId !== userId && !(intentId && order.userId === null)) || order.status !== "pending") continue;
+    if (order.status !== "pending") continue;
     if (!order.stripeSessionId) {
       // Creation may have reached Stripe before the connection failed. Repeating
       // the original operation recovers that session with the same idempotency key.
@@ -200,14 +193,9 @@ async function reconcileOrder(order: typeof purchaseOrders.$inferSelect) {
   finally { await db.update(purchaseOrders).set({ checkedAt: new Date() }).where(eq(purchaseOrders.id, order.id)); }
 }
 
-// Called only after authenticating the account or authorizing the private intent.
-// Stripe's verified session, never a browser return parameter, grants the funds.
-export async function refreshPendingPayments(scope: { userId: number | null; intentId?: string }) {
-  if (!scope.intentId && scope.userId === null) return;
-  const owner = scope.userId === null ? isNull(purchaseOrders.userId) : eq(purchaseOrders.userId, scope.userId);
-  const accessible = scope.intentId
-    ? and(eq(purchaseOrders.intentId, scope.intentId), or(isNull(purchaseOrders.userId), owner))
-    : owner;
+// Called only after authorizing the private article purchase token.
+export async function refreshPendingPayments(scope: { intentId: string }) {
+  const accessible = eq(purchaseOrders.intentId, scope.intentId);
   const cutoff = new Date(Date.now() - 5000);
   const eligible = and(accessible, eq(purchaseOrders.status, "pending"), sql`${purchaseOrders.stripeSessionId} IS NOT NULL`, lt(purchaseOrders.checkedAt, cutoff));
   const pending = await db.select().from(purchaseOrders).where(eligible).orderBy(purchaseOrders.checkedAt).limit(5);

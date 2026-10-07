@@ -73,7 +73,7 @@ Generating an article from a stub requests a featured wiki overview with five im
 
 Run `npm run generate:stubs -- --dry-run` to preview the target page for every stub without connecting to the database or calling generation APIs.
 
-Run `npm run generate:stubs` to load the latest stubs from `wiki-files` and generate their initial pages one at a time, using the same text and image generation as the app. No running web server or separate import is needed. Configure `DATABASE_URL` and `GEMINI_API_KEY` in `.env`, apply database migrations first, and set `OPENAI_API_KEY` for images.
+Run `npm run generate:stubs` to load the latest stubs from `wiki-files` and generate their initial pages one at a time, using the same text and image generation as the app. This operator-only command calls the internal generator directly; it needs no Stripe purchase, running web server or separate import. Public article generation still requires payment. Configure `DATABASE_URL` and `GEMINI_API_KEY` in `.env`, apply database migrations first, and set `OPENAI_API_KEY` for images. Generation incurs the usual provider costs.
 
 Stubs are articles whose slug begins with `stub-`. The last link supplies the target title and slug; for `[[Article name|display text]]`, the title is `Article name`. Existing target pages in the database or local Markdown files are preserved and skipped. Missing or invalid target links stop the run before any changes. Generation failures are reported and the remaining stubs continue; the command exits unsuccessfully if any page failed. Optional image failures are reported while keeping the saved page.
 
@@ -81,9 +81,30 @@ Stubs are articles whose slug begins with `stub-`. The last link supplies the ta
 
 Run `npm run reset:wiki -- --dry-run` to preview the reset without connecting to the database or changing files.
 
-Run `npm run reset:wiki` to delete article content, revisions, question sets and contributions in the database configured by `DATABASE_URL`. Accounts, purchases, credit history, generation records, schema and migration history remain intact. The reset refuses to run while payments, refunds or generation are pending. The script deletes non-stub Markdown files, image files and the contents of image directories under `wiki-files`, preserving every `stub-*.md` file and all wiki folders. It does not follow symbolic links.
+Run `npm run reset:wiki` to delete article content, revisions and contributions in the database configured by `DATABASE_URL`. Accounts, purchases, credit history, generation records, schema and migration history remain intact. The reset refuses to run while payments, refunds or generation are pending. The script deletes non-stub Markdown files, image files and the contents of image directories under `wiki-files`, preserving every `stub-*.md` file and all wiki folders. It does not follow symbolic links.
 
 Stop article generation before resetting. Files are staged and restored if the database reset fails. Article content is left empty; run `npm run import:wiki` afterwards to reload the preserved stubs.
+
+### Full production reset and fresh opening articles
+
+`npm run reset:wiki -- --all` erases **all application data**, including users, purchase history, credit ledgers, saved answers and generation jobs. It preserves the schema, migration history and stub files. It does not cancel or refund payments in Stripe. Pending payments, refunds and generation must be resolved first. Take database and wiki-volume backups if you need a recovery point.
+
+Set `BILLING_ENABLED=false` on the Railway service and deploy that setting with this code before resetting. Ensure `GEMINI_API_KEY` and `OPENAI_API_KEY` are configured. From the local project, connect to the production container (not a local shell with production variables):
+
+```sh
+railway ssh --service fakeipedia --environment production
+```
+
+Inside that remote shell, preview the seeds and deletion plan, then reset and regenerate:
+
+```sh
+cd /app
+npm run generate:stubs -- --dry-run
+npm run reset:wiki -- --all --dry-run
+npm run reset:wiki -- --all && npm run generate:stubs
+```
+
+Keep the shell connected until generation completes. If interrupted or a page fails, rerun only `npm run generate:stubs`; it skips pages already saved. Restore `BILLING_ENABLED=true` and redeploy/restart the service afterward to reopen checkout and clear in-memory graph caches. The reset stages files inside `/app/wiki-files`, so it works when that directory is a separate mounted volume.
 
 ## Validation
 
@@ -93,6 +114,6 @@ npm run lint
 npm run build
 ```
 
-## Article purchases and account credits
+## $1.50 / £1.50 / €1.50 article purchases
 
-See [payment setup and Railway deployment](docs/payments.md). New article generation requires a Stripe article purchase or one account credit; reading remains free. Configure the settings in `.env.example`, test with Stripe test-mode keys, and run `npm run worker` alongside `npm run dev`. Production `npm start` starts both processes; set Railway’s pre-deploy command to `npm run db:migrate`.
+See [payment setup and Railway deployment](docs/payments.md). New article generation requires a one-time $1.50, £1.50 or €1.50 Stripe payment based on the visitor’s region (USD by default); reading remains free. Configure the settings in `.env.example`, test with Stripe test-mode keys, and run `npm run worker` alongside `npm run dev`. Production `npm start` starts both processes; set Railway’s pre-deploy command to `npm run db:migrate`.

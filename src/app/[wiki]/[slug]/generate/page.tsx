@@ -7,6 +7,8 @@ import { articlePath, titleFromSlug, wikiPath } from "@/lib/wiki";
 import { readWikiDefinition } from "@/lib/wiki-files";
 
 import { PrepareArticle } from "./prepare-article";
+import { headers } from "next/headers";
+import { requestCurrency } from "@/lib/request-currency";
 import { redirect } from "next/navigation";
 import "../wiki.css";
 
@@ -99,6 +101,7 @@ export default async function GeneratePage({
           <div className="wiki-article">
             <PrepareArticle
               key={`${wiki}/${slug}/${sourceSlug}`}
+              currency={requestCurrency(await headers())}
               wiki={wiki}
               slug={slug}
               title={title}

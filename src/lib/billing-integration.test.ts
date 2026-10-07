@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { Client } from "pg";
 import Stripe from "stripe";
-import { creditCheckoutRequest } from "../components/billing-client";
 
 test("payments and durable generation against PostgreSQL", { skip: !process.env.BILLING_TEST_DATABASE_URL }, async (t) => {
   const root = process.cwd();
@@ -32,17 +31,15 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   }
   const databaseUrl = new URL(process.env.BILLING_TEST_DATABASE_URL!);
   databaseUrl.searchParams.set("options", `-csearch_path=${schema}`);
-  Object.assign(process.env, { DATABASE_URL: databaseUrl.toString(), GEMINI_API_KEY: "test", OPENAI_API_KEY: "test", BILLING_ENABLED: "true", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_WEBHOOK_SECRET: "whsec_fixture", STRIPE_ARTICLE_PRICE_ID: "price_article", STRIPE_CREDIT_PACK_PRICE_ID: "price_pack", CREDIT_PACK_QUANTITY: "5", APP_URL: "http://localhost:3000" });
-  delete process.env.CLERK_SECRET_KEY;
-  delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  Object.assign(process.env, { DATABASE_URL: databaseUrl.toString(), GEMINI_API_KEY: "test", OPENAI_API_KEY: "test", BILLING_ENABLED: "true", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_WEBHOOK_SECRET: "whsec_fixture", STRIPE_ARTICLE_PRICE_ID: "price_article", APP_URL: "http://localhost:3000" });
   process.chdir(directory);
   const { db } = await import("../db");
   const { articleLockPool, acquireArticleLock } = await import("./article-lock");
   const { generationStreamPool, notifyGeneration } = await import("./billing/generation-stream");
   cleanDb = async () => { await generationStreamPool.end(); await db.$client.end(); await articleLockPool.end(); };
-  const { saveIntent, readIntent, authorizeIntent } = await import("./billing/intents");
+  const { saveIntent, readIntent } = await import("./billing/intents");
   const { createCheckout, fulfillCheckout, cancelCheckout, processRefunds, reconcilePayments, refreshPendingPayments } = await import("./billing/payments");
-  const { reserveCredit, creditBalance, completeJob } = await import("./billing/credits");
+  const { completeJob } = await import("./billing/jobs");
   const { claimJob, runJob, recoverExhaustedJobs, publishGenerationProgress } = await import("./billing/worker");
   const { emptyGenerationProgress } = await import("./generation-progress");
   const { POST: publicGenerate } = await import("../app/api/articles/generate/route");
@@ -51,10 +48,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   const { POST: statusEndpoint } = await import("../app/api/billing/status/route");
   const { POST: progressEndpoint } = await import("../app/api/articles/progress/route");
   const { GET: imageStatusEndpoint } = await import("../app/api/articles/images/status/route");
-  const { GET: balanceEndpoint } = await import("../app/api/billing/balance/route");
-  const { savePublicHandle } = await import("./account-profile");
   const { discussionContributions } = await import("./discussion-contributions");
-  const { POST: profileEndpoint } = await import("../app/api/account/profile/route");
   const sessions = new Map<string, Record<string, unknown>>();
   const sessionKeys = new Map<string, string>();
   const refunds = new Map<string, Record<string, unknown>>();
@@ -78,7 +72,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
       const pathname = url.pathname;
       if (pathname.startsWith("/v1/prices/")) {
         const id = pathname.split("/").at(-1)!;
-        return Response.json({ id, object: "price", active: true, type: "one_time", billing_scheme: "per_unit", unit_amount: id === "price_article" ? 150 : 500, currency: "eur" });
+        return Response.json({ id, object: "price", active: true, type: "one_time", billing_scheme: "per_unit", unit_amount: 150, currency: "eur", currency_options: { usd: { unit_amount: 150 }, gbp: { unit_amount: 150 } } });
       }
       if (pathname === "/v1/checkout/sessions" && init?.method === "POST") {
         const fields = new URLSearchParams(String(init.body));
@@ -89,7 +83,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
         const id = `cs_test_${sessions.size + 1}`;
         const price = fields.get("line_items[0][price]");
         const orderId = fields.get("client_reference_id");
-        const session = { id, object: "checkout.session", url: `https://checkout.stripe.com/${id}`, status: "open", payment_status: "unpaid", mode: "payment", client_reference_id: orderId, metadata: { orderId }, currency: "eur", amount_total: price === "price_article" ? 150 : 500, payment_intent: `pi_${id}`, line_items: { data: [{ quantity: 1, price: { id: price } }], has_more: false } };
+        const session = { id, object: "checkout.session", url: `https://checkout.stripe.com/${id}`, status: "open", payment_status: "unpaid", mode: "payment", client_reference_id: orderId, metadata: { orderId }, currency: fields.get("currency"), amount_total: 150, payment_intent: `pi_${id}`, line_items: { data: [{ quantity: 1, price: { id: price } }], has_more: false } };
         sessions.set(id, session); sessionKeys.set(key, id);
         return Response.json(session);
       }
@@ -119,7 +113,10 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
       await beforeModel(prompt);
       const slug = prompt.match(/Article URL slug: ([^\n]+)/)![1];
       const title = prompt.match(/Begin with exactly:\n\n# ([^\n]+)/)![1];
-      const markdown = `# ${title}\n\n![View](./images/${slug}_view.png "The subject")\n\nThe river runs backwards. [[Next Chapter]]`;
+      const markdown = prompt.includes("featured overview")
+        ? `# ${title}\n\n` + Array.from({ length: 4 }, (_, i) => `![District ${i}](./images/${slug}_${i}.png "District ${i}")`).join("\n\n") + "\n\n" +
+          Array.from({ length: 8 }, (_, i) => `## Topic ${i}\n\n${"The river runs backwards. ".repeat(60)}`).join("\n\n")
+        : `# ${title}\n\n![View](./images/${slug}_view.png "The subject")\n\nThe river runs backwards. [[Next Chapter]]`;
       return new Response(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: markdown }, finish_reason: failModel ? "length" : "stop" }] })}\n\ndata: [DONE]\n\n`, { headers: { "Content-Type": "text/event-stream" } });
     }
     assert.equal(url.hostname, "api.openai.com");
@@ -136,16 +133,16 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     const body = { wiki: "world", slug, title: slug, sourceSlug, answer, requestId: crypto.randomUUID(), token: randomBytes(32).toString("hex") };
     return { intent: await saveIntent(body), body };
   };
-  const user = async (balance = 0) => {
-    const id = (await admin.query("INSERT INTO users(email) VALUES($1) RETURNING id", [`reader-${crypto.randomUUID()}@example.test`])).rows[0].id as number;
-    await admin.query("INSERT INTO credit_accounts(user_id,balance) VALUES($1,$2)", [id, balance]);
-    return id;
-  };
   const markPaid = async (intentId?: string) => {
     const order = (await admin.query("SELECT * FROM purchase_orders WHERE ($1::uuid IS NULL OR intent_id=$1) ORDER BY created_at DESC LIMIT 1", [intentId ?? null])).rows[0];
     const session = sessions.get(order.stripe_session_id)!;
     session.payment_status = "paid"; session.status = "complete";
     return { order, session };
+  };
+  const fund = async (d: Awaited<ReturnType<typeof draft>>) => {
+    await createCheckout(d.intent, crypto.randomUUID());
+    const { session } = await markPaid(d.intent.id);
+    await fulfillCheckout(String(session.id));
   };
   const signedEvent = (session: Record<string, unknown>) => {
     const body = JSON.stringify({ id: `evt_${session.id}`, object: "event", type: "checkout.session.completed", data: { object: session } });
@@ -153,15 +150,96 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     return new Request("http://localhost:3000/api/billing/webhook", { method: "POST", headers: { "stripe-signature": signature }, body });
   };
 
+  await t.test("regional prices persist through checkout, status, retries and fulfillment", async () => {
+    for (const [ip, currency] of [["8.8.8.8", "usd"], ["81.2.69.160", "gbp"], ["86.43.1.1", "eur"], ["2a02:8084::1", "eur"]]) {
+      const d = await draft();
+      const regional = request({ intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID() });
+      regional.headers.set("x-real-ip", ip);
+      assert.equal((await checkoutEndpoint(regional)).status, 200);
+      const order = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows[0];
+      const session = sessions.get(order.stripe_session_id)!;
+      assert.equal(order.currency, currency);
+      assert.equal(order.amount, 150);
+      assert.equal(session.currency, currency);
+      // Another region must not change the original pending order or its display.
+      const statusRequest = request({ intentId: d.intent.id, token: d.body.token });
+      statusRequest.headers.set("x-real-ip", "8.8.8.8");
+      const result = await (await statusEndpoint(statusRequest)).json();
+      assert.equal(result.result.currency, currency);
+      assert.equal(result.result.amount, 150);
+      const count = sessions.size;
+      await createCheckout(d.intent, crypto.randomUUID(), "usd");
+      assert.equal(sessions.size, count);
+      await markPaid(d.intent.id);
+      await fulfillCheckout(String(session.id));
+      const jobs = await admin.query("SELECT id FROM generation_jobs WHERE intent_id=$1", [d.intent.id]);
+      assert.equal(jobs.rowCount, 1);
+      // Keep this fixture out of later generation-worker tests.
+      await admin.query("UPDATE generation_jobs SET status='succeeded' WHERE intent_id=$1", [d.intent.id]);
+    }
+    const d = await draft();
+    const invalid = await checkoutEndpoint(request({ intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), currency: "jpy" }));
+    assert.equal(invalid.status, 400);
+  });
+
+  await t.test("Irish IPs show and charge euros despite British English or a client currency override", async () => {
+    const d = await draft();
+    const checkout = (ip: string) => {
+      const req = request({ intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), currency: "gbp" });
+      req.headers.set("x-real-ip", ip);
+      req.headers.set("accept-language", "en-GB,en;q=0.9");
+      return checkoutEndpoint(req);
+    };
+    const preview = request({ intentId: d.intent.id, token: d.body.token });
+    preview.headers.set("x-real-ip", "86.43.1.1");
+    preview.headers.set("accept-language", "en-GB");
+    assert.equal((await (await statusEndpoint(preview)).json()).result.currency, "eur");
+    assert.equal((await checkout("86.43.1.1")).status, 200);
+    const euroOrder = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1 AND status='pending'", [d.intent.id])).rows[0];
+    assert.equal(euroOrder.currency, "eur");
+    assert.equal(sessions.get(euroOrder.stripe_session_id)!.currency, "eur");
+    const statusRequest = request({ intentId: d.intent.id, token: d.body.token });
+    statusRequest.headers.set("accept-language", "en-GB,en;q=0.9");
+    assert.equal((await (await statusEndpoint(statusRequest)).json()).result.currency, "eur");
+    const count = sessions.size;
+    assert.equal((await checkout("81.2.69.160")).status, 200);
+    assert.equal(sessions.size, count, "An open checkout keeps its original currency");
+    await cancelCheckout(d.intent.id);
+    assert.equal((await checkout("81.2.69.160")).status, 200);
+    const poundOrder = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1 AND status='pending'", [d.intent.id])).rows[0];
+    assert.equal(poundOrder.currency, "gbp");
+    assert.equal(sessions.get(poundOrder.stripe_session_id)!.currency, "gbp");
+    await cancelCheckout(d.intent.id);
+  });
+
+  await t.test("checkouts opened at 1.00 keep their saved amount and still fund an article", async () => {
+    const d = await draft();
+    await createCheckout(d.intent, crypto.randomUUID(), "eur");
+    const { order, session } = await markPaid(d.intent.id);
+    await admin.query("UPDATE purchase_orders SET amount=100 WHERE id=$1", [order.id]);
+    session.amount_total = 100;
+    session.payment_status = "unpaid";
+    session.status = "open";
+    const status = await (await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token }))).json();
+    assert.equal(status.result.amount, 100);
+    assert.equal(status.result.currency, "eur");
+    const count = sessions.size;
+    await createCheckout(d.intent, crypto.randomUUID(), "usd");
+    assert.equal(sessions.size, count);
+    await markPaid(d.intent.id);
+    await fulfillCheckout(String(session.id));
+    const jobs = await admin.query("SELECT id FROM generation_jobs WHERE intent_id=$1", [d.intent.id]);
+    assert.equal(jobs.rowCount, 1);
+    await admin.query("UPDATE generation_jobs SET status='succeeded' WHERE intent_id=$1", [d.intent.id]);
+  });
+
   await t.test("unpaid requests, forged webhooks and another guest's token cannot start generation", async () => {
-    const signedOutBalance = await balanceEndpoint(new Request("http://localhost:3000/api/billing/balance"));
-    assert.deepEqual(await signedOutBalance.json(), { signedIn: false });
     assert.equal((await publicGenerate(request({ wiki: "world", slug: "target" }))).status, 402);
     const d = await draft("Preserved answer");
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 402);
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: randomBytes(32).toString("hex"), funding: "credit" }))).status, 404);
     assert.equal((await webhook(request({ id: "fake" }))).status, 400);
-    assert.equal((await checkoutEndpoint(request({ kind: "credits", intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), price: "free", quantity: 999 }))).status, 401);
+    assert.equal((await checkoutEndpoint(request({ kind: "credits", intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), price: "free", quantity: 999 }))).status, 400);
     assert.equal(modelCalls, 0);
     await assert.rejects(saveIntent({ ...d.body, answer: "Changed" }), /different details/);
     await assert.rejects(readIntent(d.intent.id, randomBytes(32).toString("hex")), /not found/);
@@ -173,9 +251,9 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     const [order] = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows;
     assert.equal(order.price_id, "price_article"); assert.equal(order.amount, 150); assert.equal(order.user_id, null);
     const count = sessions.size;
-    await createCheckout("article", d.intent, null, crypto.randomUUID());
+    await createCheckout(d.intent, crypto.randomUUID());
     assert.equal(sessions.size, count);
-    await cancelCheckout(d.intent.id, null);
+    await cancelCheckout(d.intent.id);
     assert.equal((await readIntent(d.intent.id, d.body.token)).answer, d.body.answer);
     assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "cancelled");
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 402);
@@ -183,17 +261,17 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   await t.test("a rejected checkout can be retried without losing the saved answer", async () => {
     const d = await draft("Keep this after a checkout error.");
     rejectCheckout = true;
-    await assert.rejects(createCheckout("article", d.intent, null, crypto.randomUUID()), /configuration rejected/);
+    await assert.rejects(createCheckout(d.intent, crypto.randomUUID()), /configuration rejected/);
     rejectCheckout = false;
     assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows[0].status, "cancelled");
     assert.equal((await readIntent(d.intent.id, d.body.token)).answer, d.body.answer);
-    const checkout = await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const checkout = await createCheckout(d.intent, crypto.randomUUID());
     assert.ok(checkout.url);
-    await cancelCheckout(d.intent.id, null);
+    await cancelCheckout(d.intent.id);
   });
   await t.test("duplicate signed webhooks fund one job; worker saves text and contribution despite optional failures", async () => {
     const d = await draft("  The ferrymen elect their king.  ");
-    await createCheckout("article", d.intent, null, crypto.randomUUID());
+    await createCheckout(d.intent, crypto.randomUUID());
     const { session, order } = await markPaid(d.intent.id);
     const responses = await Promise.all([webhook(signedEvent(session)), webhook(signedEvent(session))]);
     assert.deepEqual(responses.map((r) => r.status), [200, 200]);
@@ -210,109 +288,33 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     beforeModel = async () => {};
     const [saved] = (await admin.query("SELECT * FROM generation_jobs WHERE id=$1", [job.id])).rows;
     assert.equal(saved.status, "succeeded");
+    const contributions = await discussionContributions(saved.article_id);
+    assert.equal(contributions[0].answer, d.body.answer);
+    assert.equal("handle" in contributions[0], false);
     assert.equal((await admin.query("SELECT status FROM lore_contributions WHERE id=$1", [d.intent.contributionId])).rows[0].status, "succeeded");
     assert.match(await readFile(path.join(directory, "wiki-files", "world", `${d.intent.slug}.md`), "utf8"), /river runs backwards/);
     await fulfillCheckout(String(session.id));
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 200);
     assert.equal(await claimJob(), null);
   });
-  await t.test("optional public handles follow authenticated funding and edits update Discussion", async () => {
-    const owner = await user(1);
-    const other = await user();
-    await admin.query("UPDATE users SET name='Private billing name' WHERE id=$1", [owner]);
-    assert.equal((await profileEndpoint(request({ handle: "Forged", userId: owner }))).status, 401);
-    assert.equal((await profileEndpoint(new Request("http://localhost:3000/api/account/profile", { method: "POST", headers: { origin: "https://elsewhere.example" }, body: JSON.stringify({ handle: "Forged" }) }))).status, 403);
-    await savePublicHandle(other, "Another reader");
-    const d = await draft("The public library moves each winter.");
-    await db.transaction(tx => reserveCredit(tx, d.intent, owner));
-    const job = await claimJob(); assert.ok(job);
-    await runJob(job);
-    const article = (await admin.query("SELECT id FROM articles WHERE wiki='world' AND slug=$1", [d.intent.slug])).rows[0];
-    let rows = await discussionContributions(article.id);
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0].handle, null);
-    assert.ok(!JSON.stringify(rows).includes("Private billing name"));
-    await savePublicHandle(owner, "  River reader  ");
-    rows = await discussionContributions(article.id);
-    assert.equal(rows[0].handle, "River reader");
-    await savePublicHandle(owner, "New name");
-    assert.equal((await discussionContributions(article.id))[0].handle, "New name");
-    await assert.rejects(savePublicHandle(owner, "x".repeat(51)));
-    assert.equal((await discussionContributions(article.id))[0].handle, "New name");
-    await savePublicHandle(owner, "");
-    assert.equal((await discussionContributions(article.id))[0].handle, null);
-    assert.equal((await admin.query("SELECT handle FROM users WHERE id=$1", [other])).rows[0].handle, "Another reader");
-  });
-  await t.test("account switching starts a separate credit checkout and retries reuse one order", async () => {
-    const firstUser = await user(); const secondUser = await user();
-    const first = creditCheckoutRequest({ signedIn: true, userId: firstUser, authAvailable: true, prices: null });
-    await createCheckout("credits", null, firstUser, first.requestId);
-    await assert.rejects(createCheckout("credits", null, secondUser, first.requestId), /belongs to another purchase/);
-    const second = creditCheckoutRequest({ signedIn: true, userId: secondUser, authAvailable: true, prices: null }, first);
-    const checkout = await createCheckout("credits", null, secondUser, second.requestId);
-    assert.ok(checkout.url);
-    assert.deepEqual(await createCheckout("credits", null, secondUser, second.requestId), checkout);
-    const orders = (await admin.query("SELECT id,user_id FROM purchase_orders WHERE request_id IN ($1,$2)", [first.requestId, second.requestId])).rows;
-    assert.equal(orders.length, 2);
-    assert.deepEqual(new Set(orders.map(order => order.user_id)), new Set([firstUser, secondUser]));
-    for (const order of orders) await cancelCheckout(null, order.user_id, order.id);
-  });
-  await t.test("credit pack grants once and cannot be spent by another account", async () => {
-    const owner = await user(); const other = await user();
-    const d = await draft();
-    await createCheckout("credits", d.intent, owner, crypto.randomUUID());
-    const { session } = await markPaid(d.intent.id);
-    await Promise.all([fulfillCheckout(String(session.id)), fulfillCheckout(String(session.id))]);
-    assert.deepEqual(await creditBalance(owner), { balance: 5, reserved: 1, available: 4 });
-    assert.equal((await readIntent(d.intent.id, undefined, owner)).id, d.intent.id);
-    await assert.rejects(readIntent(d.intent.id, undefined, other), /private purchase link/);
-    await assert.rejects(authorizeIntent(d.intent, other), /account that funded/);
-    assert.equal((await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token }))).status, 403);
-    await assert.rejects(db.transaction(tx => reserveCredit(tx, d.intent, other)), /already been funded/);
-    const job = await claimJob(); assert.ok(job); await runJob(job);
-    assert.deepEqual(await creditBalance(owner), { balance: 4, reserved: 0, available: 4 });
-    assert.equal((await admin.query("SELECT count(*)::int AS n FROM lore_contributions WHERE request_id=$1", [d.intent.id])).rows[0].n, 0);
-    await assert.rejects(db.transaction(tx => completeJob(tx, job, 1)), /lease was lost/);
-    assert.deepEqual(await creditBalance(owner), { balance: 4, reserved: 0, available: 4 });
-  });
-  await t.test("simultaneous credit spending cannot overdraw the last credit", async () => {
-    const owner = await user(1);
-    const [a, b] = await Promise.all([draft(), draft()]);
-    const results = await Promise.allSettled([db.transaction(tx => reserveCredit(tx, a.intent, owner)), db.transaction(tx => reserveCredit(tx, b.intent, owner))]);
-    assert.equal(results.filter(r => r.status === "fulfilled").length, 1);
-    assert.equal(results.filter(r => r.status === "rejected").length, 1);
-    assert.deepEqual(await creditBalance(owner), { balance: 1, reserved: 1, available: 0 });
-    const job = await claimJob(); assert.ok(job); await runJob(job);
-    assert.deepEqual(await creditBalance(owner), { balance: 0, reserved: 0, available: 0 });
-  });
+
+
+
+
   await t.test("lease expiry retries interrupted work and fences a stale worker", async () => {
-    const owner = await user(1); const d = await draft("Remember the lighthouse.");
-    await db.transaction(tx => reserveCredit(tx, d.intent, owner));
+    const d = await draft("Remember the lighthouse.");
+    await fund(d);
     const first = await claimJob(); assert.ok(first);
     await admin.query("UPDATE generation_jobs SET leased_until=now()-interval '1 minute' WHERE id=$1", [first.id]);
     const retry = await claimJob(); assert.ok(retry);
     assert.equal(retry.id, first.id); assert.equal(retry.attempts, 2); assert.notEqual(retry.leaseToken, first.leaseToken);
     await assert.rejects(db.transaction(tx => completeJob(tx, first, 1)), /lease was lost/);
     await runJob(retry);
-    assert.deepEqual(await creditBalance(owner), { balance: 0, reserved: 0, available: 0 });
+    assert.equal((await admin.query("SELECT status FROM generation_jobs WHERE id=$1", [retry.id])).rows[0].status, "succeeded");
   });
-  await t.test("article-save rollback leaves the reserved credit intact until a successful retry", async () => {
-    const owner = await user(1); const d = await draft("Keep the original custom.");
-    await db.transaction(tx => reserveCredit(tx, d.intent, owner));
-    await admin.query("CREATE FUNCTION reject_debit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.balance < OLD.balance THEN RAISE EXCEPTION 'Simulated storage failure'; END IF; RETURN NEW; END $$");
-    await admin.query("CREATE TRIGGER reject_debit BEFORE UPDATE ON credit_accounts FOR EACH ROW EXECUTE FUNCTION reject_debit()");
-    const job = await claimJob(); assert.ok(job); await runJob(job);
-    assert.deepEqual(await creditBalance(owner), { balance: 1, reserved: 1, available: 0 });
-    assert.equal((await admin.query("SELECT count(*)::int AS n FROM articles WHERE wiki='world' AND slug=$1", [d.intent.slug])).rows[0].n, 0);
-    await assert.rejects(readFile(path.join(directory, "wiki-files", "world", `${d.intent.slug}.md`)), { code: "ENOENT" });
-    await admin.query("DROP TRIGGER reject_debit ON credit_accounts");
-    await admin.query("DROP FUNCTION reject_debit()");
-    await admin.query("UPDATE generation_jobs SET available_at=now() WHERE id=$1", [job.id]);
-    const retry = await claimJob(); assert.ok(retry); await runJob(retry);
-    assert.deepEqual(await creditBalance(owner), { balance: 0, reserved: 0, available: 0 });
-  });
+
   await t.test("terminal guest failure refunds once even when recording the refund first fails", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { session, order } = await markPaid(d.intent.id); await fulfillCheckout(String(session.id));
     failModel = true;
     for (let i = 0; i < 3; i++) {
@@ -330,22 +332,9 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     assert.equal(refundCalls, before + 1);
     assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "refunded");
   });
-  await t.test("three failed attempts restore one credit, retain the answer, and cannot consume again", async () => {
-    const owner = await user(1); const d = await draft("Keep this for retry.");
-    await db.transaction(tx => reserveCredit(tx, d.intent, owner));
-    failModel = true;
-    for (let i = 1; i <= 3; i++) {
-      const job = await claimJob(); assert.ok(job); assert.equal(job.attempts, i); await runJob(job);
-      await admin.query("UPDATE generation_jobs SET available_at=now() WHERE id=$1", [job.id]);
-    }
-    failModel = false;
-    assert.deepEqual(await creditBalance(owner), { balance: 1, reserved: 0, available: 1 });
-    assert.equal((await readIntent(d.intent.id, d.body.token)).answer, d.body.answer);
-    assert.equal((await admin.query("SELECT count(*)::int AS n FROM credit_transactions WHERE user_id=$1 AND reserved_delta=-1", [owner])).rows[0].n, 1);
-    assert.equal(await claimJob(), null);
-  });
+
   await t.test("stale red links refund the single purchase, including retries and pending refunds", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { session, order } = await markPaid(d.intent.id); await fulfillCheckout(String(session.id));
     await admin.query("INSERT INTO articles(wiki,slug,title,content) VALUES('world',$1,$1,'Already written')", [d.intent.slug]);
     const job = await claimJob(); assert.ok(job); await runJob(job);
@@ -361,17 +350,18 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "refunded");
   });
   await t.test("third interrupted attempt returns funds and concurrent target locks do not waste attempts", async () => {
-    const owner = await user(1); const d = await draft(); await db.transaction(tx => reserveCredit(tx, d.intent, owner));
+    const d = await draft(); await fund(d);
     const job = await claimJob(); assert.ok(job);
     const release = await acquireArticleLock(`generation:world:${d.intent.slug}`);
     await runJob(job); await release();
     assert.equal((await admin.query("SELECT attempts FROM generation_jobs WHERE id=$1", [job.id])).rows[0].attempts, 0);
     await admin.query("UPDATE generation_jobs SET status='running',attempts=3,lease_token=$2,leased_until=now()-interval '1 minute' WHERE id=$1", [job.id, crypto.randomUUID()]);
     await recoverExhaustedJobs(); await recoverExhaustedJobs();
-    assert.deepEqual(await creditBalance(owner), { balance: 1, reserved: 0, available: 1 });
+    assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows[0].status, "refund_pending");
+    await processRefunds();
   });
   await t.test("reconciliation recovers missed delivery and rejects altered paid sessions", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { session } = await markPaid(d.intent.id);
     session.amount_total = 1;
     await assert.rejects(fulfillCheckout(String(session.id)), /does not match/);
@@ -383,54 +373,11 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   const allowPaymentRefresh = async (orderId: string) => {
     await admin.query("UPDATE purchase_orders SET checked_at=now()-interval '1 minute' WHERE id=$1", [orderId]);
   };
-  await t.test("account polling confirms paid credits without a webhook or resume and scopes access", async () => {
-    const owner = await user(); const other = await user();
-    await createCheckout("credits", null, owner, crypto.randomUUID());
-    const { order, session } = await markPaid();
-    await allowPaymentRefresh(order.id);
-    const reads = sessionReads;
-    await refreshPendingPayments({ userId: null });
-    await refreshPendingPayments({ userId: other });
-    assert.equal(sessionReads, reads);
-    await Promise.all([refreshPendingPayments({ userId: owner }), refreshPendingPayments({ userId: owner })]);
-    assert.equal(sessionReads, reads + 2);
-    assert.deepEqual(await creditBalance(owner), { balance: 5, reserved: 0, available: 5 });
-    assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "paid");
-    await refreshPendingPayments({ userId: owner });
-    await fulfillCheckout(String(session.id));
-    assert.deepEqual(await creditBalance(owner), { balance: 5, reserved: 0, available: 5 });
-  });
-  await t.test("repeated generation submissions reserve one credit for the saved contribution", async () => {
-    const owner = await user(2);
-    const d = await draft("Preserve this answer before starting");
-    assert.ok(d.intent.contributionId);
-    const [first, second] = await Promise.all([
-      db.transaction(tx => reserveCredit(tx, d.intent, owner)),
-      db.transaction(tx => reserveCredit(tx, d.intent, owner)),
-    ]);
-    assert.equal(first.id, second.id);
-    assert.deepEqual(await creditBalance(owner), { balance: 2, reserved: 1, available: 1 });
-    const job = await claimJob(); assert.ok(job); await runJob(job);
-    const retry = await db.transaction(tx => reserveCredit(tx, d.intent, owner));
-    assert.equal(retry.id, first.id);
-    assert.deepEqual(await creditBalance(owner), { balance: 1, reserved: 0, available: 1 });
-    assert.equal((await readIntent(d.intent.id, d.body.token, owner)).answer, "Preserve this answer before starting");
-  });
-  await t.test("intent polling confirms a credit pack and reserves its article without exposing another account", async () => {
-    const owner = await user(); const d = await draft("Keep this contribution");
-    await createCheckout("credits", d.intent, owner, crypto.randomUUID());
-    const { order } = await markPaid(d.intent.id);
-    await allowPaymentRefresh(order.id);
-    await refreshPendingPayments({ intentId: d.intent.id, userId: null });
-    await refreshPendingPayments({ intentId: d.intent.id, userId: await user() });
-    assert.deepEqual(await creditBalance(owner), { balance: 0, reserved: 0, available: 0 });
-    await refreshPendingPayments({ intentId: d.intent.id, userId: owner });
-    assert.deepEqual(await creditBalance(owner), { balance: 5, reserved: 1, available: 4 });
-    const job = await claimJob(); assert.ok(job); await runJob(job);
-    assert.equal((await readIntent(d.intent.id, undefined, owner)).answer, "Keep this contribution");
-  });
+
+
+
   await t.test("payment status verifies guest checkout and returns the new job in the same response", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { order } = await markPaid(d.intent.id);
     await allowPaymentRefresh(order.id);
     const reads = sessionReads;
@@ -438,38 +385,56 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     assert.equal(sessionReads, reads);
     const response = await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token }));
     assert.equal(response.status, 200);
-    const status = await response.json();
+    const { result: status } = await response.json();
     assert.equal(status.orders[0].status, "paid"); assert.equal(status.job.status, "queued");
     const job = await claimJob(); assert.ok(job); await runJob(job);
   });
-  await t.test("polling throttles unpaid checks and retries provider failures without trusting return flags", async () => {
-    const owner = await user();
-    await createCheckout("credits", null, owner, crypto.randomUUID());
-    const { order, session } = await markPaid();
+
+  await t.test("polling verifies payment, throttles requests, and recovers provider failures", async () => {
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
+    const { order, session } = await markPaid(d.intent.id);
     session.payment_status = "unpaid"; session.status = "open";
     await allowPaymentRefresh(order.id);
-    await refreshPendingPayments({ userId: owner });
+    await refreshPendingPayments({ intentId: d.intent.id });
     const reads = sessionReads;
-    await refreshPendingPayments({ userId: owner });
+    await refreshPendingPayments({ intentId: d.intent.id });
     assert.equal(sessionReads, reads);
-    assert.equal((await creditBalance(owner)).balance, 0);
+    assert.equal(await claimJob(), null);
     session.payment_status = "paid"; session.status = "complete";
     await allowPaymentRefresh(order.id);
     failSessionRead = true;
-    await refreshPendingPayments({ userId: owner });
+    await refreshPendingPayments({ intentId: d.intent.id });
     failSessionRead = false;
-    assert.equal((await creditBalance(owner)).balance, 0);
-    session.amount_total = 1;
+    assert.equal(await claimJob(), null);
     await allowPaymentRefresh(order.id);
-    await refreshPendingPayments({ userId: owner });
-    assert.equal((await creditBalance(owner)).balance, 0);
-    session.amount_total = 500;
-    await allowPaymentRefresh(order.id);
-    await refreshPendingPayments({ userId: owner });
-    assert.equal((await creditBalance(owner)).balance, 5);
+    await Promise.all([refreshPendingPayments({ intentId: d.intent.id }), refreshPendingPayments({ intentId: d.intent.id })]);
+    const job = await claimJob(); assert.ok(job); await runJob(job);
+  });
+  await t.test("parallel checkout retries create one order and tokens remain mandatory after payment", async () => {
+    const d = await draft();
+    const results = await Promise.all([createCheckout(d.intent, crypto.randomUUID()), createCheckout(d.intent, crypto.randomUUID())]);
+    assert.deepEqual(results[0], results[1]);
+    assert.equal((await admin.query("SELECT count(*)::int AS n FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows[0].n, 1);
+    const { session } = await markPaid(d.intent.id);
+    await fulfillCheckout(String(session.id));
+    await assert.rejects(readIntent(d.intent.id, undefined), /private purchase link/);
+    assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token, funding: "credit" }))).status, 200);
+    const job = await claimJob(); assert.ok(job); await runJob(job);
+    await assert.rejects(createCheckout(d.intent, crypto.randomUUID()), /already been funded/);
+  });
+  await t.test("retired checkout payments are refunded without granting credits or generation", async () => {
+    const d = await draft();
+    await createCheckout(d.intent, crypto.randomUUID());
+    const { session, order } = await markPaid(d.intent.id);
+    await admin.query("UPDATE purchase_orders SET amount=200 WHERE id=$1", [order.id]);
+    session.amount_total = 200;
+    await fulfillCheckout(String(session.id));
+    assert.equal((await admin.query("SELECT status FROM purchase_orders WHERE id=$1", [order.id])).rows[0].status, "refund_pending");
+    assert.equal(await claimJob(), null);
+    await processRefunds();
   });
   await t.test("live preview retains committed text while images run and replays completed images", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { session } = await markPaid(d.intent.id); await fulfillCheckout(String(session.id));
     const job = await claimJob(); assert.ok(job);
     let releaseImage!: () => void;
@@ -488,7 +453,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
         await new Promise(resolve => setTimeout(resolve, 10));
       }
       const body = { intentId: d.intent.id, token: d.body.token, includeProgress: true };
-      const preview = await (await statusEndpoint(request(body))).json();
+      const { result: preview } = await (await statusEndpoint(request(body))).json();
       assert.equal(preview.job.status, "succeeded", "Text and payment have committed");
       assert.equal(preview.job.previewComplete, false, "Do not redirect before images finish");
       assert.equal(preview.progress.phase, "images");
@@ -505,14 +470,14 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
       await publishGenerationProgress(job, { ...preview.progress, failedImages: { [`${d.intent.slug}_view.png`]: true } });
       assert.equal((await (await publicImageStatus()).json()).images[`${d.intent.slug}_view.png`].state, "missing", "Failed images offer retry instead of spinning");
       await publishGenerationProgress(job, preview.progress);
-      const reconnect = await (await statusEndpoint(request(body))).json();
+      const { result: reconnect } = await (await statusEndpoint(request(body))).json();
       assert.deepEqual(reconnect.progress, preview.progress);
       assert.equal((await statusEndpoint(request({ ...body, token: randomBytes(32).toString("hex") }))).status, 404);
       await publishGenerationProgress({ ...job, leaseToken: crypto.randomUUID() }, emptyGenerationProgress());
-      const fenced = await (await statusEndpoint(request(body))).json();
+      const { result: fenced } = await (await statusEndpoint(request(body))).json();
       assert.deepEqual(fenced.progress, preview.progress, "A stale worker cannot overwrite the preview");
     } finally { releaseImage(); await running; beforeImage = async () => {}; successfulImage = false; }
-    const finished = await (await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token, includeProgress: true }))).json();
+    const { result: finished } = await (await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token, includeProgress: true }))).json();
     assert.equal(finished.job.previewComplete, true);
     assert.equal(finished.progress.phase, "done");
     assert.equal(Object.keys(finished.progress.readyImages).length, 1);
@@ -520,11 +485,11 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     const ready = await imageStatusEndpoint(new Request(`http://localhost:3000/api/articles/images/status?wiki=world&slug=${d.intent.slug}`));
     assert.equal((await ready.json()).images[`${d.intent.slug}_view.png`].state, "ready");
     assert.equal((await imageStatusEndpoint(new Request("http://localhost/api/articles/images/status?wiki=../world&slug=target"))).status, 400);
-    const lightweight = await (await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token }))).json();
+    const { result: lightweight } = await (await statusEndpoint(request({ intentId: d.intent.id, token: d.body.token }))).json();
     assert.equal(lightweight.progress, undefined);
   });
   await t.test("authorized live readers receive individual deltas before checkpoint writes and can reconnect", async () => {
-    const d = await draft(); await createCheckout("article", d.intent, null, crypto.randomUUID());
+    const d = await draft(); await createCheckout(d.intent, crypto.randomUUID());
     const { session } = await markPaid(d.intent.id); await fulfillCheckout(String(session.id));
     const job = await claimJob(); assert.ok(job);
     assert.equal((await progressEndpoint(request({ intentId: d.intent.id, token: randomBytes(32).toString("hex") }))).status, 404);
@@ -562,5 +527,20 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     assert.equal((await admin.query("SELECT status FROM generation_jobs WHERE id=$1", [job.id])).rows[0].status, "succeeded");
     const other = await draft();
     assert.equal((await progressEndpoint(request({ intentId: other.intent.id, token: other.body.token }))).status, 409);
+  });
+  await t.test("operator seed generation works without checkout while public generation stays gated", async () => {
+    const { generateArticleRequest } = await import("./article-generation");
+    const { generateStubPages, planStubGeneration } = await import("./generate-stubs");
+    const stub = { wiki: "world", slug: "stub-seed", title: "Seed", content: "[[Opening World]]" };
+    await admin.query("INSERT INTO articles (wiki,slug,title,content) VALUES ($1,$2,$3,$4)", [stub.wiki,stub.slug,stub.title,stub.content]);
+    const payload = { wiki: "world", slug: "opening-world", title: "Opening World", sourceSlug: stub.slug };
+    assert.equal((await publicGenerate(request(payload))).status, 402);
+    const before = modelCalls;
+    const plan = planStubGeneration([stub]);
+    assert.deepEqual(await generateStubPages(plan, generateArticleRequest, () => {}), { generated: 1, skipped: 0, failed: 0 });
+    assert.equal(modelCalls, before + 1);
+    assert.deepEqual(await generateStubPages(plan, generateArticleRequest, () => {}), { generated: 0, skipped: 1, failed: 0 });
+    assert.equal(modelCalls, before + 1);
+    assert.match(await readFile(path.join(directory, "wiki-files/world/opening-world.md"), "utf8"), /river runs backwards/);
   });
 });

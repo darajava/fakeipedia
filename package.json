@@ -15,10 +15,10 @@
     "worker": "node --import tsx src/scripts/generation-worker.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.9.4",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.2",
+    "geoip-country": "5.0.202610070241",
     "gray-matter": "^4.0.3",
     "katex": "^0.16.47",
     "next": "16.3.4",

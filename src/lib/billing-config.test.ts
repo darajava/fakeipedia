@@ -7,8 +7,8 @@ import { money } from "../components/billing-client";
 test("payment launch settings fail closed until explicitly configured", () => {
   const previous = { ...process.env };
   try {
-    Object.assign(process.env, { BILLING_ENABLED: "true", APP_URL: "http://localhost:3000", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_ARTICLE_PRICE_ID: "price_article", STRIPE_CREDIT_PACK_PRICE_ID: "price_pack", CREDIT_PACK_QUANTITY: "5", STRIPE_ALLOW_LIVE: "false" });
-    assert.equal(billingConfig().packQuantity, 5);
+    Object.assign(process.env, { BILLING_ENABLED: "true", APP_URL: "http://localhost:3000", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_ARTICLE_PRICE_ID: "price_article", STRIPE_ALLOW_LIVE: "false" });
+    assert.equal(billingConfig().articlePrice, "price_article");
     process.env.BILLING_ENABLED = "false";
     assert.throws(billingConfig, /not available/);
     assert.ok(stripeClient(), "Existing payments and refunds can still be reconciled while new checkout is disabled");
@@ -17,13 +17,39 @@ test("payment launch settings fail closed until explicitly configured", () => {
     assert.throws(billingConfig, /Live payments/);
     process.env.STRIPE_ALLOW_LIVE = "true";
     assert.equal(billingConfig().secret, "sk_live_fixture");
-    process.env.CREDIT_PACK_QUANTITY = "-1";
-    assert.throws(billingConfig, /not available/);
-    process.env.CREDIT_PACK_QUANTITY = "1.5";
-    assert.throws(billingConfig, /not available/);
-    process.env.CREDIT_PACK_QUANTITY = "5";
     process.env.APP_URL = "http://public.example";
     assert.throws(billingConfig, /configuration/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  }
+});
+
+test("restricted keys work while live keys still require explicit enablement", () => {
+  const previous = { ...process.env };
+  try {
+    Object.assign(process.env, { BILLING_ENABLED: "true", APP_URL: "http://localhost:3000", STRIPE_ARTICLE_PRICE_ID: "price_article", STRIPE_ALLOW_LIVE: "false" });
+    for (const prefix of ["sk", "rk"]) {
+      process.env.STRIPE_SECRET_KEY = `${prefix}_test_fixture`;
+      assert.equal(billingConfig().secret, `${prefix}_test_fixture`);
+      assert.ok(stripeClient());
+      process.env.STRIPE_SECRET_KEY = `${prefix}_live_fixture`;
+      for (const disabled of ["false", "", "TRUE"]) {
+        process.env.STRIPE_ALLOW_LIVE = disabled;
+        assert.throws(billingConfig, /Live payments/);
+        assert.throws(stripeClient, /Live payments/);
+      }
+      process.env.STRIPE_ALLOW_LIVE = "true";
+      assert.equal(billingConfig().secret, `${prefix}_live_fixture`);
+      assert.ok(stripeClient());
+      process.env.STRIPE_ALLOW_LIVE = "false";
+    }
+    process.env.STRIPE_ALLOW_LIVE = "true";
+    for (const key of ["pk_live_fixture", "whsec_fixture", "rk_live_", "not-a-key"]) {
+      process.env.STRIPE_SECRET_KEY = key;
+      assert.throws(billingConfig, /secret or restricted/);
+      assert.throws(stripeClient, /secret or restricted/);
+    }
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
     Object.assign(process.env, previous);
@@ -40,7 +66,7 @@ test("billing request validation rejects malformed and oversized payloads", asyn
   assert.throws(() => requireUuid("an-order"), /identifier/);
 });
 
-test("cross-site browser requests cannot spend account credits", async () => {
+test("cross-site browser requests cannot change payment state", async () => {
   let called = false;
   const response = await billingEndpoint(new Request("http://localhost:3000/api", { method: "POST", headers: { origin: "https://other.example" } }), async () => {
     called = true; return Response.json({ ok: true });

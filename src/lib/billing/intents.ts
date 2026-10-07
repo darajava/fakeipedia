@@ -17,20 +17,14 @@ export function hashToken(token: unknown) {
 export function verifyToken(hash: string, token: unknown) {
   if (!timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(hashToken(token), "hex"))) throw new BillingError("Purchase not found.", 404);
 }
-export async function readIntent(id: unknown, token: unknown, userId: number | null = null) {
+export async function readIntent(id: unknown, token: unknown) {
   const [intent] = await db.select().from(generationIntents).where(eq(generationIntents.id, requireUuid(id))).limit(1);
   if (!intent) throw new BillingError("Purchase not found.", 404);
-  if (userId) {
-    const [ownedJob] = await db.select({ id: generationJobs.id }).from(generationJobs).where(and(eq(generationJobs.intentId, intent.id), eq(generationJobs.userId, userId))).limit(1);
-    const [ownedOrder] = await db.select({ id: purchaseOrders.id }).from(purchaseOrders).where(and(eq(purchaseOrders.intentId, intent.id), eq(purchaseOrders.userId, userId))).limit(1);
-    if (ownedJob || ownedOrder) return intent;
-  }
   verifyToken(intent.tokenHash, token);
   return intent;
 }
-export async function authorizeIntent(intent: Intent, userId: number | null) {
+export async function authorizeIntent(intent: Intent) {
   const [job] = await db.select().from(generationJobs).where(eq(generationJobs.intentId, intent.id)).limit(1);
-  if (job?.userId && job.userId !== userId) throw new BillingError("Sign in to the account that funded this article.", 403);
   return job;
 }
 
@@ -59,7 +53,7 @@ export async function saveIntent(body: GenerateRequest & { token?: unknown }) {
   });
 }
 
-export async function latestOrders(intentId: string, userId: number | null) {
+export async function latestOrders(intentId: string) {
   const rows = await db.select().from(purchaseOrders).where(eq(purchaseOrders.intentId, intentId));
-  return rows.filter((order) => !order.userId || order.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }

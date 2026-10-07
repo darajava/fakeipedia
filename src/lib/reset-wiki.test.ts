@@ -66,6 +66,17 @@ test("restores all generated files if clearing the database fails", async () => 
   });
 });
 
+test("stages generated files inside the wiki volume and removes staging afterward", async () => {
+  await fixture(async (_root, directory) => {
+    await resetWiki(directory, async () => {
+      const staging = (await readdir(directory)).filter(name => name.startsWith(".wiki-reset-"));
+      assert.equal(staging.length, 1);
+      assert.ok((await readdir(path.join(directory, staging[0]))).length > 0);
+    });
+    assert.equal((await readdir(directory)).some(name => name.startsWith(".wiki-reset-")), false);
+  });
+});
+
 test("preserves stubs even inside an image directory", async () => {
   await fixture(async (_root, directory) => {
     const stub = path.join(directory, "zorg", "images", "stub-example.md");

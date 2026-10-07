@@ -20,6 +20,10 @@ const loadingMessages = [
   "Generating article",
   "Organising sections",
   "Considering history",
+  "Taking its sweet time",
+  "Connecting the dots",
+  "Filling in the details",
+  "Giving this world some depth",
 ];
 
 export type GenerateArticleProps = {
@@ -170,7 +174,7 @@ export function GenerateArticle({ wiki, slug, title, intentId, token, existingAr
                 router.replace(articlePath(wiki, slug)); router.refresh(); return;
               }
               if (message.status === "failed") {
-                setError(`We couldn’t finish this article. ${message.funding === "credit" ? "Your credit has been returned. " : ""}Your answer is saved.`);
+                setError(`We couldn’t finish this article. Your answer is saved.`);
                 return;
               }
               setStatus(message.status === "queued"
