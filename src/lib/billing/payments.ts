@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { articles, generationIntents, generationJobs, purchaseOrders } from "../../db/schema";
 import { BillingError, billingConfig, requireUuid, stripeClient, validateArticlePrice } from "./config";
 import type { Intent } from "./intents";
-import { ARTICLE_PRICE_AMOUNT, isArticleOrder, isArticleCurrency, type ArticleCurrency } from "../article-pricing";
+import { ARTICLE_PRICE_AMOUNTS, isArticleOrder, isArticleCurrency, type ArticleCurrency } from "../article-pricing";
 
 let cachedPrices: { key: string; expiresAt: number; value: Promise<Awaited<ReturnType<typeof loadPrices>>> } | undefined;
 export async function prices(currency: ArticleCurrency) {
@@ -18,7 +18,7 @@ export async function prices(currency: ArticleCurrency) {
   }
   const article = await cachedPrices.value;
   validateArticlePrice(article, currency);
-  return { article: { id: article.id, amount: ARTICLE_PRICE_AMOUNT, currency } };
+  return { article: { id: article.id, amount: ARTICLE_PRICE_AMOUNTS[currency], currency } };
 }
 async function loadPrices() {
   const config = billingConfig();

@@ -7,7 +7,7 @@ test("country pricing uses pounds for GB, euros for euro users, and dollars else
   for (const region of ["GB", "gb"]) assert.equal(currencyForCountry(region), "gbp");
   for (const region of ["IE", "FR", "DE", "ES", "BG", "HR", "FI", "XK", "MC"]) assert.equal(currencyForCountry(region), "eur");
   for (const region of ["US", "CA", "AU", "JP", "CH", "SE", "PL", "DK", "", "XX"]) assert.equal(currencyForCountry(region), "usd");
-  assert.deepEqual(["usd", "gbp", "eur"].map(currency => articlePriceLabel(currency as "usd" | "gbp" | "eur")), ["$1.50", "£1.50", "€1.50"]);
+  assert.deepEqual(["usd", "gbp", "eur"].map(currency => articlePriceLabel(currency as "usd" | "gbp" | "eur")), ["$0.90", "£0.85", "€0.90"]);
 });
 
 test("visitor IP selects currency regardless of browser language", () => {
@@ -37,11 +37,11 @@ test("missing, private, malformed and unknown IPs default to dollars without gue
   assert.equal(requestCurrency(new Headers({ "accept-language": "en-IE" })), "usd");
 });
 
-test("saved 1.00 checkouts remain valid without allowing arbitrary prices", () => {
+test("saved 1.00 and 1.50 checkouts remain valid without allowing arbitrary prices", () => {
   assert.equal(articlePriceLabel("eur", 100), "€1.00");
   for (const currency of ["usd", "gbp", "eur"]) {
-    for (const amount of [100, 150]) assert.equal(isArticleOrder({ kind: "article", amount, currency }), true);
-    for (const amount of [0, 99, 149, 151, 200]) assert.equal(isArticleOrder({ kind: "article", amount, currency }), false);
+    for (const amount of [currency === "gbp" ? 85 : 90, 100, 150]) assert.equal(isArticleOrder({ kind: "article", amount, currency }), true);
+    for (const amount of [0, currency === "gbp" ? 90 : 85, 99, 149, 151, 200]) assert.equal(isArticleOrder({ kind: "article", amount, currency }), false);
   }
   assert.equal(isArticleOrder({ kind: "credits", amount: 150, currency: "eur" }), false);
   assert.equal(isArticleOrder({ kind: "article", amount: 150, currency: "jpy" }), false);

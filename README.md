@@ -114,6 +114,6 @@ npm run lint
 npm run build
 ```
 
-## $1.50 / £1.50 / €1.50 article purchases
+## $0.90 / £0.85 / €0.90 article purchases
 
-See [payment setup and Railway deployment](docs/payments.md). New article generation requires a one-time $1.50, £1.50 or €1.50 Stripe payment based on the visitor’s region (USD by default); reading remains free. Configure the settings in `.env.example`, test with Stripe test-mode keys, and run `npm run worker` alongside `npm run dev`. Production `npm start` starts both processes; set Railway’s pre-deploy command to `npm run db:migrate`.
+See [payment setup and Railway deployment](docs/payments.md). New article generation requires a one-time $0.90, £0.85 or €0.90 Stripe payment based on the visitor’s region (USD by default); reading remains free. Configure the settings in `.env.example`, test with Stripe test-mode keys, and run `npm run worker` alongside `npm run dev`. Production `npm start` starts both processes; set Railway’s pre-deploy command to `npm run db:migrate`.

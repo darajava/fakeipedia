@@ -72,7 +72,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
       const pathname = url.pathname;
       if (pathname.startsWith("/v1/prices/")) {
         const id = pathname.split("/").at(-1)!;
-        return Response.json({ id, object: "price", active: true, type: "one_time", billing_scheme: "per_unit", unit_amount: 150, currency: "eur", currency_options: { usd: { unit_amount: 150 }, gbp: { unit_amount: 150 } } });
+        return Response.json({ id, object: "price", active: true, type: "one_time", billing_scheme: "per_unit", unit_amount: 90, currency: "eur", currency_options: { usd: { unit_amount: 90 }, gbp: { unit_amount: 85 } } });
       }
       if (pathname === "/v1/checkout/sessions" && init?.method === "POST") {
         const fields = new URLSearchParams(String(init.body));
@@ -83,7 +83,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
         const id = `cs_test_${sessions.size + 1}`;
         const price = fields.get("line_items[0][price]");
         const orderId = fields.get("client_reference_id");
-        const session = { id, object: "checkout.session", url: `https://checkout.stripe.com/${id}`, status: "open", payment_status: "unpaid", mode: "payment", client_reference_id: orderId, metadata: { orderId }, currency: fields.get("currency"), amount_total: 150, payment_intent: `pi_${id}`, line_items: { data: [{ quantity: 1, price: { id: price } }], has_more: false } };
+        const session = { id, object: "checkout.session", url: `https://checkout.stripe.com/${id}`, status: "open", payment_status: "unpaid", mode: "payment", client_reference_id: orderId, metadata: { orderId }, currency: fields.get("currency"), amount_total: fields.get("currency") === "gbp" ? 85 : 90, payment_intent: `pi_${id}`, line_items: { data: [{ quantity: 1, price: { id: price } }], has_more: false } };
         sessions.set(id, session); sessionKeys.set(key, id);
         return Response.json(session);
       }
@@ -159,14 +159,14 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
       const order = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows[0];
       const session = sessions.get(order.stripe_session_id)!;
       assert.equal(order.currency, currency);
-      assert.equal(order.amount, 150);
+      assert.equal(order.amount, currency === "gbp" ? 85 : 90);
       assert.equal(session.currency, currency);
       // Another region must not change the original pending order or its display.
       const statusRequest = request({ intentId: d.intent.id, token: d.body.token });
       statusRequest.headers.set("x-real-ip", "8.8.8.8");
       const result = await (await statusEndpoint(statusRequest)).json();
       assert.equal(result.result.currency, currency);
-      assert.equal(result.result.amount, 150);
+      assert.equal(result.result.amount, currency === "gbp" ? 85 : 90);
       const count = sessions.size;
       await createCheckout(d.intent, crypto.randomUUID(), "usd");
       assert.equal(sessions.size, count);
@@ -249,7 +249,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     const response = await checkoutEndpoint(request({ kind: "article", intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), priceId: "price_free", amount: 1, quantity: 999 }));
     assert.equal(response.status, 200);
     const [order] = (await admin.query("SELECT * FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rows;
-    assert.equal(order.price_id, "price_article"); assert.equal(order.amount, 150); assert.equal(order.user_id, null);
+    assert.equal(order.price_id, "price_article"); assert.equal(order.amount, 90); assert.equal(order.user_id, null);
     const count = sessions.size;
     await createCheckout(d.intent, crypto.randomUUID());
     assert.equal(sessions.size, count);
@@ -366,7 +366,7 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     session.amount_total = 1;
     await assert.rejects(fulfillCheckout(String(session.id)), /does not match/);
     assert.equal(await claimJob(), null);
-    session.amount_total = 150;
+    session.amount_total = 90;
     await reconcilePayments();
     const job = await claimJob(); assert.ok(job); await runJob(job);
   });

@@ -1,4 +1,4 @@
-export const ARTICLE_PRICE_AMOUNT = 150;
+export const ARTICLE_PRICE_AMOUNTS = { usd: 90, gbp: 85, eur: 90 } as const;
 
 export type ArticleCurrency = "usd" | "gbp" | "eur";
 
@@ -19,12 +19,12 @@ export function currencyForCountry(country: string): ArticleCurrency {
   return euroCountries.has(region) ? "eur" : "usd";
 }
 
-export function articlePriceLabel(currency: ArticleCurrency, amount = ARTICLE_PRICE_AMOUNT) {
+export function articlePriceLabel(currency: ArticleCurrency, amount: number = ARTICLE_PRICE_AMOUNTS[currency]) {
   return `${{ usd: "$", gbp: "£", eur: "€" }[currency]}${(amount / 100).toFixed(2)}`;
 }
 
 export function isArticleOrder(order: { kind: string; amount: number; currency: string }) {
-  // Honor the original price of checkouts opened before the increase.
+  // Honor the original price of checkouts opened before price changes.
   return order.kind === "article" && isArticleCurrency(order.currency) &&
-    (order.amount === ARTICLE_PRICE_AMOUNT || order.amount === 100);
+    (order.amount === ARTICLE_PRICE_AMOUNTS[order.currency] || order.amount === 100 || order.amount === 150);
 }

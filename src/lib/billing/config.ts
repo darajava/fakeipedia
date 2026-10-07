@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { ARTICLE_PRICE_AMOUNT, articlePriceLabel, type ArticleCurrency } from "../article-pricing";
+import { ARTICLE_PRICE_AMOUNTS, articlePriceLabel, type ArticleCurrency } from "../article-pricing";
 
 export class BillingError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -45,7 +45,7 @@ export function requireUuid(value: unknown): string {
 export function validateArticlePrice(price: Stripe.Price, currency: ArticleCurrency) {
   const amount = price.currency === currency ? price.unit_amount : price.currency_options?.[currency]?.unit_amount;
   if (!price.active || price.type !== "one_time" || price.billing_scheme !== "per_unit" ||
-      amount !== ARTICLE_PRICE_AMOUNT || price.transform_quantity) {
+      amount !== ARTICLE_PRICE_AMOUNTS[currency] || price.transform_quantity) {
     throw new BillingError(`The article price must be a one-time payment of ${articlePriceLabel(currency)}.`, 503);
   }
 }

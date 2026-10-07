@@ -3,7 +3,7 @@ import { billingBody, billingEndpoint, privateJson } from "@/lib/billing/http";
 import { existingArticle } from "@/lib/billing/worker";
 import { refreshPendingPayments } from "@/lib/billing/payments";
 import { generationPreviewComplete } from "@/lib/generation-progress";
-import { ARTICLE_PRICE_AMOUNT, isArticleCurrency } from "@/lib/article-pricing";
+import { ARTICLE_PRICE_AMOUNTS, isArticleCurrency } from "@/lib/article-pricing";
 import { requestCurrency } from "@/lib/request-currency";
 import type { PaymentStatus } from "@/lib/billing-types";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const currency = savedOrder && isArticleCurrency(savedOrder.currency) ? savedOrder.currency : requestCurrency(request.headers);
     return privateJson({
       currency,
-      amount: savedOrder?.amount ?? ARTICLE_PRICE_AMOUNT,
+      amount: savedOrder?.amount ?? ARTICLE_PRICE_AMOUNTS[currency],
       intent: { id: intent.id, wiki: intent.wiki, slug: intent.slug, title: intent.title, sourceSlug: intent.sourceSlug, answer: intent.answer },
       job: job ? { id: job.id, orderId: job.orderId, status: job.status, attempts: job.attempts, funding: job.funding, previewComplete: generationPreviewComplete(job) } : null,
       ...(body.includeProgress === true ? { progress: job?.progress ?? null } : {}),
