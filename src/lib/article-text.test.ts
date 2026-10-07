@@ -29,7 +29,7 @@ async function collectText(client?: OpenAI) {
   return chunks;
 }
 
-test("streams article text from Gemini with high reasoning without exposing reasoning", async (t) => {
+test("streams article text from Gemini with medium reasoning without exposing reasoning", async (t) => {
   const originalKey = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = "test-gemini-key";
   t.after(() => {
@@ -56,7 +56,7 @@ test("streams article text from Gemini with high reasoning without exposing reas
   assert.deepEqual(requestBody, {
     model: "gemini-3.8-flash",
     messages: [{ role: "user", content: "Write an article about Zorg." }],
-    reasoning_effort: "high",
+    reasoning_effort: "medium",
     stream: true,
   });
 });
