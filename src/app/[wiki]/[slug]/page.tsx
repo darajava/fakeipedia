@@ -1,4 +1,6 @@
 import { WikiArticleContent } from "@/components/wiki-article-content";
+import { WikiTableOfContents } from "@/components/wiki-table-of-contents";
+import { articleHeadings, prepareArticleMarkdown } from "@/lib/article-headings";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cache } from "react";
 import type { Metadata } from "next";
@@ -101,13 +103,14 @@ export default async function WikiPage({ params }: WikiPageProps) {
       </header>
 
       <div className="wiki-layout">
-        <aside className="wiki-sidebar">
+        <aside className="wiki-sidebar wiki-article-sidebar">
           <nav aria-label="Wiki navigation">
             <Link href={mainPageSlug ? articlePath(wiki, mainPageSlug) : wikiPath(wiki)}>Main page</Link>
             <Link href={graphPath(wiki)}>Article graph</Link>
             <Link href="/">All wikis</Link>
             <a href={`/random?wiki=${encodeURIComponent(wiki)}`}>Random article</a>
           </nav>
+          <WikiTableOfContents headings={articleHeadings(prepareArticleMarkdown(article.content, wiki))} />
         </aside>
 
         <main className="wiki-main">

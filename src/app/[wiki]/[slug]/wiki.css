@@ -114,6 +114,57 @@
   color: var(--wiki-link);
 }
 
+/* Keep the page as the scroll container so article navigation can stay in view. */
+body:has(.wiki-article-sidebar) {
+  overflow-x: clip;
+}
+
+.wiki-article-sidebar {
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.wiki-toc {
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--wiki-border-light);
+  overflow-wrap: anywhere;
+}
+
+.wiki-toc summary {
+  color: var(--wiki-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wiki-sidebar .wiki-toc nav {
+  display: block;
+  margin-top: 8px;
+}
+
+.wiki-toc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wiki-toc ul ul {
+  padding-inline-start: 12px;
+}
+
+.wiki-toc a {
+  display: block;
+  padding-block: 4px;
+  line-height: 1.4;
+}
+
+.wiki-article :is(h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: 16px;
+}
+
 .wiki-main {
   min-width: 0;
   padding: 22px 28px 48px 0;
@@ -450,6 +501,22 @@
     flex-direction: row;
     flex-wrap: wrap;
     gap: 6px 16px;
+  }
+
+  .wiki-article-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .wiki-toc {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+
+  .wiki-sidebar .wiki-toc nav {
+    max-height: 16rem;
+    overflow-y: auto;
   }
 
   .wiki-main {

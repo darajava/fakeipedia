@@ -11,7 +11,8 @@ import { WikipediaNote } from "@/components/wikipedia-note";
 import { rehypeCodeLinks } from "@/lib/rehype-code-links";
 import { extractArticleImages } from "@/lib/article-draft";
 import { remarkSubjectInfobox } from "@/lib/remark-subject-infobox";
-import { articleLink, articlePath, imageSource, prepareWikiLinks } from "@/lib/wiki";
+import { articleLink, articlePath, imageSource } from "@/lib/wiki";
+import { prepareArticleMarkdown, rehypeArticleHeadings } from "@/lib/article-headings";
 import { articleImageStates } from "@/lib/article-image-status";
 
 type Props = {
@@ -24,7 +25,7 @@ type Props = {
 export async function WikiArticleContent({ wiki, article, existingSlugs }: Props) {
   const retryableImages = extractArticleImages(article.content, article.slug);
   const imageStates = await articleImageStates(wiki, article);
-  const markdown = prepareWikiLinks(article.content.replace(/^#\s+.+?(?:\r?\n)+/, ""), wiki);
+  const markdown = prepareArticleMarkdown(article.content, wiki);
   return <>
     <h1>{article.title}</h1>
     <p className="wiki-subtitle">
@@ -36,7 +37,7 @@ export async function WikiArticleContent({ wiki, article, existingSlugs }: Props
 
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, [remarkSubjectInfobox, { title: article.title, wiki, slug: article.slug }]]}
-      rehypePlugins={[rehypeRaw, rehypeKatex, rehypeCodeLinks]}
+      rehypePlugins={[rehypeRaw, rehypeArticleHeadings, rehypeKatex, rehypeCodeLinks]}
       components={{
         table: WikiTable,
         a({ href, children, node: _node, className, ...props }) {
