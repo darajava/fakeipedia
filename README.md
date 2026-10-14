@@ -65,7 +65,7 @@ Wiki Markdown files and image directories are ignored by Git. Keep `wiki-files` 
 
 Use `[[Article name]]` or `[[Article name|display text]]` for links within a wiki, and `./images/filename.png` for images. Explicit links such as `[Rome](/roman-empire/rome)` can point to other wikis. Legacy `/wiki/ARTICLE` links inside articles resolve within the current wiki.
 
-Article generation uses Gemini 3.8 Flash (`gemini-3.8-flash`) with high reasoning and only the current wiki's catalogue and source article as context. It saves new Markdown and images inside that wiki's directory. Text generation requires `GEMINI_API_KEY` in `.env`; image generation requires `OPENAI_API_KEY`.
+Article generation uses Gemini 4 Argon (`gemini-4-argon`) with medium reasoning and the current wiki's catalogue, up to ten referring articles (including the source article), and world overview as context. It saves new Markdown and images inside that wiki's directory. Text generation requires `GEMINI_API_KEY` in `.env`; image generation requires `OPENAI_API_KEY`.
 
 Generating an article from a stub requests a featured wiki overview with five images. The stub supplies the world brief, broad subject coverage and image plan. Its last article link determines the overview target, including when earlier links or a target section are present.
 

@@ -12,7 +12,7 @@ export function createGeminiClient() {
 
 export async function* generateArticleText(prompt: string, client = createGeminiClient()) {
   const stream = await client.chat.completions.create({
-    model: "gemini-3.8-flash",
+    model: "gemini-4-argon",
     messages: [{ role: "user", content: prompt }],
     reasoning_effort: "medium",
     stream: true,

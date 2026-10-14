@@ -54,7 +54,7 @@ test("streams article text from Gemini with medium reasoning without exposing re
 
   assert.deepEqual(await collectText(), ["# Zorg\n\n", "A world of canals."]);
   assert.deepEqual(requestBody, {
-    model: "gemini-3.8-flash",
+    model: "gemini-4-argon",
     messages: [{ role: "user", content: "Write an article about Zorg." }],
     reasoning_effort: "medium",
     stream: true,

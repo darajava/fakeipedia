@@ -154,6 +154,7 @@ export function PrepareArticle(props: {
         <section className="wiki-lore-preparation">
           <h1>{title}</h1>
           <p>Make your mark on Fakeipedia</p>
+          <p>Your article will be generated using Gemini 4 Argon.</p>
           {error && <p role="alert">{error}</p>}
           <label htmlFor="lore-answer" className="wiki-lore-question">
             Optionally: in a few words say how {title} fits into this world.
