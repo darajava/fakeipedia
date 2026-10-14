@@ -6,7 +6,7 @@ Currency is selected from the visitor's IP address: GBP for GB, EUR for euro use
 
 The country database ships with the pinned `geoip-country` dependency. Refresh it regularly with `npm install --save-exact geoip-country@latest`, commit the package and lockfile changes, and redeploy. Next.js keeps the package external so its database files remain available at runtime. This product includes GeoLite2 Data created by [MaxMind](https://www.maxmind.com/), distributed through [geoip-country](https://github.com/sapics/geoip-country); see the package's LICENSE and EULA.
 
-The preparation page saves the optional answer and opens the payment page. Only verified Stripe fulfillment queues generation. Private purchase tokens authorize status, cancellation, and live previews; they are retained in browser storage and recovery URL fragments, never query parameters. Successful billing API responses use `{ result: ... }`.
+The preparation page saves the optional answer and opens the payment page. Verified Stripe fulfillment queues generation. Entering exactly `freebie` in the steering field instead queues the same generation worker immediately and opens its live preview, without a checkout or purchase order. The match is case-sensitive and does not trim whitespace. The code is excluded from article prompts and public Discussion contributions. Freebie jobs use normal automatic retries but have no payment to refund. Apply migration `0008_freebie_generation` before deploying this path. Private purchase tokens authorize status, cancellation, and live previews; they are retained in browser storage and recovery URL fragments, never query parameters. Successful billing API responses use `{ result: ... }`.
 
 ## Setup
 

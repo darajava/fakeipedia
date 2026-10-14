@@ -1,0 +1,2 @@
+ALTER TABLE "generation_jobs" DROP CONSTRAINT "jobs_funding_check";--> statement-breakpoint
+ALTER TABLE "generation_jobs" ADD CONSTRAINT "jobs_funding_check" CHECK (("generation_jobs"."funding" = 'credit' AND "generation_jobs"."user_id" IS NOT NULL AND "generation_jobs"."order_id" IS NULL) OR ("generation_jobs"."funding" = 'article' AND "generation_jobs"."order_id" IS NOT NULL) OR ("generation_jobs"."funding" = 'freebie' AND "generation_jobs"."user_id" IS NULL AND "generation_jobs"."order_id" IS NULL));

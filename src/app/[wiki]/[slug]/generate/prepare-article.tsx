@@ -112,12 +112,19 @@ export function PrepareArticle(props: {
       } catch {
         /* Private link also carries the capability. */
       }
-      const result = await billingFetch<{ id: string; exists: boolean }>(
+      const result = await billingFetch<{ id: string; exists: boolean; generating: boolean }>(
         "/api/billing/intents",
         { wiki, slug, sourceSlug, title, ...next },
       );
       if (result.exists) {
         router.replace(articlePath(wiki, slug));
+        return;
+      }
+      if (result.generating) {
+        const started = { ...next, generating: true };
+        setSubmission(started);
+        storeDraft(answer, started);
+        setGeneration({ id: result.id, token });
         return;
       }
       router.push(`/payment?intent=${result.id}#token=${token}`);
@@ -143,6 +150,16 @@ export function PrepareArticle(props: {
           token={generation.token}
           existingArticleSlugs={props.existingArticleSlugs}
           onRetry={() => {
+            if (submission?.answer === "freebie") {
+              setSubmission(undefined);
+              storeDraft(answer, null);
+              setGeneration(undefined);
+              if (props.initialIntentId) {
+                const query = new URLSearchParams({ title, source: sourceSlug, newRequest: "1" });
+                router.replace(`${articlePath(wiki, slug)}/generate?${query}`);
+              }
+              return;
+            }
             router.push(
               `/payment?intent=${generation.id}#token=${generation.token}`,
             );

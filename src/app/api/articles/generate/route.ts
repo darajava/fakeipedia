@@ -4,7 +4,7 @@ import { billingBody, billingEndpoint, privateJson } from "@/lib/billing/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Only verified Stripe fulfillment can queue a new article.
+// Jobs are queued by verified Stripe fulfillment or the exact freebie code.
 export async function POST(request: Request) {
   return billingEndpoint(request, async () => {
     const body = await billingBody(request);

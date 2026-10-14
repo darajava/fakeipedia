@@ -40,9 +40,10 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   const { saveIntent, readIntent } = await import("./billing/intents");
   const { createCheckout, fulfillCheckout, cancelCheckout, processRefunds, reconcilePayments, refreshPendingPayments } = await import("./billing/payments");
   const { completeJob } = await import("./billing/jobs");
-  const { claimJob, runJob, recoverExhaustedJobs, publishGenerationProgress } = await import("./billing/worker");
+  const { claimJob, runJob, finishFailure, recoverExhaustedJobs, publishGenerationProgress } = await import("./billing/worker");
   const { emptyGenerationProgress } = await import("./generation-progress");
   const { POST: publicGenerate } = await import("../app/api/articles/generate/route");
+  const { POST: intentEndpoint } = await import("../app/api/billing/intents/route");
   const { POST: webhook } = await import("../app/api/billing/webhook/route");
   const { POST: checkoutEndpoint } = await import("../app/api/billing/checkout/route");
   const { POST: statusEndpoint } = await import("../app/api/billing/status/route");
@@ -150,6 +151,62 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
     return new Request("http://localhost:3000/api/billing/webhook", { method: "POST", headers: { "stripe-signature": signature }, body });
   };
 
+  await t.test("exact freebie steering queues once without payment and generates text and images", async () => {
+    const checkoutCount = sessions.size;
+    const d = await draft("freebie");
+    assert.equal(d.intent.answer, "");
+    assert.equal(d.intent.contributionId, null);
+    const responses = await Promise.all([intentEndpoint(request(d.body)), intentEndpoint(request(d.body))]);
+    for (const response of responses) {
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { result: { id: d.intent.id, exists: false, generating: true } });
+    }
+    assert.equal((await admin.query("SELECT id FROM generation_jobs WHERE intent_id=$1", [d.intent.id])).rowCount, 1);
+    assert.equal((await admin.query("SELECT id FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rowCount, 0);
+    assert.equal((await intentEndpoint(request({ ...d.body, token: randomBytes(32).toString("hex") }))).status, 404);
+    assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 200);
+    const job = await claimJob(); assert.ok(job);
+    assert.equal(job.intentId, d.intent.id);
+    assert.equal(job.funding, "freebie");
+    beforeModel = async (prompt) => { assert.ok(!prompt.includes("READER'S LORE CONTRIBUTION")); };
+    successfulImage = true;
+    try { await runJob(job); }
+    finally { beforeModel = async () => {}; successfulImage = false; }
+    const finished = (await admin.query("SELECT * FROM generation_jobs WHERE id=$1", [job.id])).rows[0];
+    assert.equal(finished.status, "succeeded");
+    assert.equal(Object.keys(finished.progress.readyImages).length, 1);
+    assert.equal(sessions.size, checkoutCount);
+    assert.match(await readFile(path.join(directory, `wiki-files/world/${d.intent.slug}.md`), "utf8"), /river runs backwards/);
+  });
+
+  await t.test("near matches still require payment and invalid sources cannot use freebie", async () => {
+    for (const answer of ["Freebie", "FREEBIE", " freebie", "freebie ", "freebie\n", "please freebie", ""]) {
+      const d = await draft(answer);
+      const response = await intentEndpoint(request(d.body));
+      assert.equal((await response.json()).result.generating, false, JSON.stringify(answer));
+      assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 402);
+    }
+    const d = await draft();
+    const invalid = await intentEndpoint(request({ ...d.body, requestId: crypto.randomUUID(), answer: "freebie", sourceSlug: "missing-source" }));
+    assert.equal(invalid.status, 400);
+  });
+
+  await t.test("failed freebie jobs retry normally and never create refunds", async () => {
+    const d = await draft("freebie");
+    const refundsBefore = refundCalls;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const job = await claimJob(); assert.ok(job);
+      assert.equal(job.intentId, d.intent.id);
+      await finishFailure(job, "Temporary generation failure");
+      const state = (await admin.query("SELECT status FROM generation_jobs WHERE id=$1", [job.id])).rows[0];
+      assert.equal(state.status, attempt === 3 ? "failed" : "queued");
+      await admin.query("UPDATE generation_jobs SET available_at=now() - interval '1 second' WHERE id=$1", [job.id]);
+    }
+    await processRefunds();
+    assert.equal(refundCalls, refundsBefore);
+    assert.equal((await admin.query("SELECT id FROM purchase_orders WHERE intent_id=$1", [d.intent.id])).rowCount, 0);
+  });
+
   await t.test("regional prices persist through checkout, status, retries and fulfillment", async () => {
     for (const [ip, currency] of [["8.8.8.8", "usd"], ["81.2.69.160", "gbp"], ["86.43.1.1", "eur"], ["2a02:8084::1", "eur"]]) {
       const d = await draft();
@@ -234,13 +291,14 @@ test("payments and durable generation against PostgreSQL", { skip: !process.env.
   });
 
   await t.test("unpaid requests, forged webhooks and another guest's token cannot start generation", async () => {
+    const before = modelCalls;
     assert.equal((await publicGenerate(request({ wiki: "world", slug: "target" }))).status, 402);
     const d = await draft("Preserved answer");
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: d.body.token }))).status, 402);
     assert.equal((await publicGenerate(request({ intentId: d.intent.id, token: randomBytes(32).toString("hex"), funding: "credit" }))).status, 404);
     assert.equal((await webhook(request({ id: "fake" }))).status, 400);
     assert.equal((await checkoutEndpoint(request({ kind: "credits", intentId: d.intent.id, token: d.body.token, requestId: crypto.randomUUID(), price: "free", quantity: 999 }))).status, 400);
-    assert.equal(modelCalls, 0);
+    assert.equal(modelCalls, before);
     await assert.rejects(saveIntent({ ...d.body, answer: "Changed" }), /different details/);
     await assert.rejects(readIntent(d.intent.id, randomBytes(32).toString("hex")), /not found/);
   });

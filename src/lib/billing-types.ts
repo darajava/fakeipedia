@@ -20,7 +20,7 @@ export type PaymentStatus = {
     orderId: string | null;
     status: JobStatus;
     attempts: number;
-    funding: "article" | "credit";
+    funding: "article" | "credit" | "freebie";
     previewComplete: boolean;
   } | null;
   orders: { id: string; kind: string; status: OrderStatus; refundNeedsAttention: boolean }[];

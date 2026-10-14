@@ -22,7 +22,7 @@ export async function releaseFunding(tx: Transaction, job: Job) {
   if (job.funding === "credit") {
     const [entry] = await tx.insert(creditTransactions).values({ userId: job.userId!, jobId: job.id, key: `release:${job.id}`, delta: 0, reservedDelta: -1, reason: "Article credit returned" }).onConflictDoNothing().returning();
     if (entry) await tx.update(creditAccounts).set({ reserved: sql`${creditAccounts.reserved} - 1` }).where(eq(creditAccounts.userId, job.userId!));
-  } else {
+  } else if (job.funding === "article") {
     await tx.update(purchaseOrders).set({ status: "refund_pending" }).where(and(eq(purchaseOrders.id, job.orderId!), eq(purchaseOrders.status, "paid")));
   }
 }

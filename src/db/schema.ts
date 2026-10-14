@@ -129,7 +129,7 @@ export const generationJobs = pgTable("generation_jobs", {
   intentId: uuid("intent_id").notNull().unique().references(() => generationIntents.id, { onDelete: "restrict" }),
   userId: integer("user_id").references(() => users.id, { onDelete: "restrict" }),
   orderId: uuid("order_id").unique().references(() => purchaseOrders.id, { onDelete: "restrict" }),
-  funding: text("funding").$type<"article" | "credit">().notNull(),
+  funding: text("funding").$type<"article" | "credit" | "freebie">().notNull(),
   status: text("status").$type<"queued" | "running" | "succeeded" | "failed" | "superseded">().notNull().default("queued"),
   attempts: integer("attempts").notNull().default(0),
   leaseToken: uuid("lease_token"),
@@ -142,7 +142,7 @@ export const generationJobs = pgTable("generation_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 }, (t) => [index("jobs_poll_idx").on(t.status, t.availableAt),
-  check("jobs_funding_check", sql`(${t.funding} = 'credit' AND ${t.userId} IS NOT NULL AND ${t.orderId} IS NULL) OR (${t.funding} = 'article' AND ${t.orderId} IS NOT NULL)`),
+  check("jobs_funding_check", sql`(${t.funding} = 'credit' AND ${t.userId} IS NOT NULL AND ${t.orderId} IS NULL) OR (${t.funding} = 'article' AND ${t.orderId} IS NOT NULL) OR (${t.funding} = 'freebie' AND ${t.userId} IS NULL AND ${t.orderId} IS NULL)`),
 ]);
 
 export const creditTransactions = pgTable("credit_transactions", {

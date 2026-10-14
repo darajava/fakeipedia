@@ -35,7 +35,9 @@ export async function saveIntent(body: GenerateRequest & { token?: unknown }) {
   const slug = typeof body.slug === "string" ? body.slug.trim().toLowerCase() : "";
   const sourceSlug = typeof body.sourceSlug === "string" ? body.sourceSlug.trim().toLowerCase() : "";
   const title = typeof body.title === "string" ? body.title.trim().slice(0, 160) : "";
-  const lore = readLoreInput(body);
+  const freebie = body.answer === "freebie";
+  // The bypass code is not a lore contribution or public Discussion entry.
+  const lore = readLoreInput(freebie ? { ...body, answer: "" } : body);
   if (!validWikiSlug(wiki) || !validSlug(slug) || !validSlug(sourceSlug) || !title || slug.startsWith("stub-")) throw new BillingError("A valid article and source are required.");
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`intent:${id}`}, 0))`);
@@ -49,6 +51,7 @@ export async function saveIntent(body: GenerateRequest & { token?: unknown }) {
     if (!source || !generationTargets(source, wiki).some((entry) => entry.slug === slug)) throw new BillingError("The source article no longer links to this page.");
     const contribution = await saveLoreContribution(wiki, slug, source, lore);
     const [saved] = await tx.insert(generationIntents).values({ id, tokenHash, wiki, slug, sourceSlug, title, answer: lore?.answer ?? "", contributionId: contribution?.id }).returning();
+    if (freebie) await tx.insert(generationJobs).values({ intentId: saved.id, funding: "freebie" });
     return saved;
   });
 }
