@@ -377,15 +377,20 @@ explorable. Link substantive subjects that would make worthwhile standalone
 articles, especially newly introduced lore. Missing articles are valid and
 important link targets; do not restrict links to the existing catalogue.
 
-- Use at most 40 internal link occurrences in the entire article, including
+- The published page may have at most 40 internal links. The app adds three
+  infobox links automatically, so write at most 37 internal link occurrences,
+  including
   "See also", headings, lists, tables, captions and "Main article" pointers,
   whether written as wiki links, Markdown links or HTML links. This applies
-  to both ordinary articles and world overviews. It is a ceiling, not a
-  target; shorter or narrower articles should use fewer links.
+  to both ordinary articles and world overviews. Allocate this budget across
+  the whole article before writing; do not spend it all in the introduction.
+  It is a ceiling, not a target, but never omit a substantial named subject
+  merely to keep the count low when there is still room.
 - There is no fixed per-paragraph link quota. Keep the prose easy to read
   by avoiding clusters of incidental links, especially in the opening.
 - Link named eras, historical periods, events, conflicts, projects, inventions,
-  technologies, institutions, people and places when the article gives them
+  technologies, institutions, laws, treaties, languages, cultural practices,
+  professions, movements, people and places when the article gives them
   a meaningful role or explanation. A subject developed in its own section
   is a strong link candidate, even if it appears nowhere else in the wiki.
   For example, an era called the "Puppet Period" should be [[Puppet Period]],
@@ -394,7 +399,10 @@ important link targets; do not restrict links to the existing catalogue.
 - Give these substantive lore links priority over incidental geographic
   labels and repeated familiar names. The 40-link ceiling is not an instruction
   to leave important new subjects unlinked: use the available space for them.
-  If over budget, remove incidental links and duplicates first. Do not invent
+  Named subjects explained in headings, paragraphs, lists or table rows have
+  priority over incidental names. If over budget, remove incidental links
+  and duplicates first, and keep "See also" to its three most useful entries.
+  Do not invent
   extra lore just to create link targets.
 - Do not link generic descriptive phrases or incidental technical concepts
   merely because they could have encyclopedia definitions. For example, leave
@@ -412,7 +420,8 @@ important link targets; do not restrict links to the existing catalogue.
   later substantial section focuses on that subject; place it in the heading
   or first paragraph, and count it toward the same ceiling. Do not link the
   article to itself. Keep "See also" to 3–6 links;
-  those may repeat important body targets but count toward the 40-link total.
+  those may repeat important body targets but count toward the 37-link authored
+  budget and the 40-link published total.
 - Use "Main article: <Link>" only when a section needs a pointer to a more
   detailed article.
 
@@ -422,7 +431,7 @@ Add links for substantive named eras, events, institutions and inventions that
 readers would want to explore. Do not leave a developed lore subject unlinked
 while spending the link budget on incidental names. Then simplify cumbersome
 sentences, explain unfamiliar lore, remove unnecessary asides and redundant
-links, and check that the entire article has at most 40 internal links.
+links, and check that the entire article has at most 37 authored internal links.
 
 Don't use ASCII or Unicode diagrams, even if the reference articles contain them.
 
@@ -507,6 +516,26 @@ Image rules:
         ? { answer: contribution.answer }
         : undefined,
     ),
+    `FINAL AUTHORING CHECK — apply after reading all reference material:
+Treat the references as facts to preserve, not a linking template. An unlinked
+name in a reference article may still need a link in this article.
+Before returning Markdown, inspect EVERY section, including headings, bold
+labels, italic names, lists, tables and captions. Identify the distinct named
+subjects that a reader would reasonably want to explore in a standalone article.
+Ensure each substantial named period, event, organization, technology, law,
+language or cultural practice has a useful [[wiki link]], unless higher-priority
+subjects have already filled the budget. A subject given its own section or a
+developed explanation should not be left unlinked in favor of incidental names.
+Use the catalogue's exact title for an existing article and the established
+canonical name for other subjects; aliases must share one target. Missing pages
+are valid link destinations. Do not link generic descriptions, the article itself,
+or image-generation alt text. Link a named section subject in its heading or
+opening paragraph; a necessary repeat there is preferable to making the reader
+search the introduction for the only link. Do not add prose or invent subjects
+to satisfy this check. Keep the prose clear and preserve all article requirements.
+Count at most 37 authored internal links, including 3–6 "See also" entries,
+leaving room for the app's three infobox links within the 40-link published cap.
+Make this review silently and return only the finished Markdown.`,
   ]
     .filter(Boolean)
     .join("\n\n");
