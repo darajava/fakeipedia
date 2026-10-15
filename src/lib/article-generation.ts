@@ -372,10 +372,10 @@ Return the finished encyclopedia article without discussing the stub or brief.`
 
 INTERNAL LINKS:
 
-Use [[Article name]] or [[Article name|display text]] selectively to connect
-the subjects most useful for understanding this article or exploring its
-world further. Missing articles are valid link targets, but a subject being
-named is not sufficient reason to link it.
+Use [[Article name]] or [[Article name|display text]] to make the world
+explorable. Link substantive subjects that would make worthwhile standalone
+articles, especially newly introduced lore. Missing articles are valid and
+important link targets; do not restrict links to the existing catalogue.
 
 - Use at most 40 internal link occurrences in the entire article, including
   "See also", headings, lists, tables, captions and "Main article" pointers,
@@ -384,31 +384,45 @@ named is not sufficient reason to link it.
   target; shorter or narrower articles should use fewer links.
 - There is no fixed per-paragraph link quota. Keep the prose easy to read
   by avoiding clusters of incidental links, especially in the opening.
-- Prioritize central people, institutions, places and events. Leave incidental
-  names and familiar geographic labels unlinked unless they play a substantial
-  role in this article. Do not invent extra lore just to create link targets.
+- Link named eras, historical periods, events, conflicts, projects, inventions,
+  technologies, institutions, people and places when the article gives them
+  a meaningful role or explanation. A subject developed in its own section
+  is a strong link candidate, even if it appears nowhere else in the wiki.
+  For example, an era called the "Puppet Period" should be [[Puppet Period]],
+  and a named model such as "Arrakis-6" should be [[Arrakis-6]] when discussed
+  as a distinct invention. These are examples, not lore to add to the article.
+- Give these substantive lore links priority over incidental geographic
+  labels and repeated familiar names. The 40-link ceiling is not an instruction
+  to leave important new subjects unlinked: use the available space for them.
+  If over budget, remove incidental links and duplicates first. Do not invent
+  extra lore just to create link targets.
 - Do not link generic descriptive phrases or incidental technical concepts
   merely because they could have encyclopedia definitions. For example, leave
   "intelligence explosion" unlinked when it describes a process rather than
   names a distinct event. Prefer the event's actual name as the link target.
-- A useful link may appear in a heading, bold label or italic text, but it
-  must meet the same relevance criteria.
-  Keep the article's own H1 title unlinked.
+- Formatting must not hide a substantive subject from linking. Link named
+  subjects in section headings, bold labels and italic text when that is their
+  first useful occurrence. For example, write "## The [[Puppet Period]]
+  (2028–2032)" with the date outside the link. Keep the article's own H1 unlinked.
 - Keep emphasis markers, surrounding quotation marks, incidental dates,
   trailing punctuation and whitespace outside the link target. Use the
   catalogue's exact title when one exists; use display text for aliases.
-- Link only the first useful occurrence of each chosen subject outside
-  "See also"; leave later mentions unlinked, including aliases of the same
-  subject. Do not link the article to itself. Keep "See also" to 3–6 links;
+- Normally link the first useful occurrence of a subject and leave nearby
+  repetitions unlinked, including aliases. A repeat link is useful when a
+  later substantial section focuses on that subject; place it in the heading
+  or first paragraph, and count it toward the same ceiling. Do not link the
+  article to itself. Keep "See also" to 3–6 links;
   those may repeat important body targets but count toward the 40-link total.
 - Use "Main article: <Link>" only when a section needs a pointer to a more
   detailed article.
 
-Before returning the article, silently edit it for clarity and selective
-linking. Simplify cumbersome sentences, explain unfamiliar lore, remove
-unnecessary asides, and cut links that interrupt reading without adding
-useful navigation. Remove repeated body targets and check that the entire
-article contains no more than 40 internal link occurrences.
+Before returning the article, silently review every section for missed
+standalone subjects, including names in headings, bold labels and italic text.
+Add links for substantive named eras, events, institutions and inventions that
+readers would want to explore. Do not leave a developed lore subject unlinked
+while spending the link budget on incidental names. Then simplify cumbersome
+sentences, explain unfamiliar lore, remove unnecessary asides and redundant
+links, and check that the entire article has at most 40 internal links.
 
 Don't use ASCII or Unicode diagrams, even if the reference articles contain them.
 
