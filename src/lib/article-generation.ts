@@ -278,10 +278,33 @@ Begin with exactly:
 
 # ${title}
 
-Use a neutral encyclopedic tone. Make it gripping and interesting.
-This article is part of world-building fiction.
-Lore and world-building details are important
-Use descriptive section headings.
+WRITING STYLE:
+
+Write a clear, engaging encyclopedia article for a curious general reader
+who knows nothing about this world. Keep a neutral, matter-of-fact voice.
+This article is part of world-building fiction; treat its events as real
+within the world, without mentioning that they are fictional.
+- Open with a plain explanation of what the subject is, who or what is
+  involved, and why it matters. Establish the central idea before adding
+  dates, aliases, technical details or connections to other lore.
+- Prefer familiar words and direct verbs. Give each sentence one main idea,
+  vary sentence length, and keep paragraphs focused, usually 2–4 sentences.
+  Avoid bureaucratic phrasing, inflated vocabulary and nested parentheticals.
+- Introduce unfamiliar institutions, events and terms with a brief explanation
+  of their role. The article must make sense without following its links.
+- Build interest through concrete actions, examples, consequences and vivid
+  details. Develop the subject instead of packing every paragraph with names,
+  dates, measurements or connections to the wider world.
+- Preserve established facts and terminology from reference articles, but
+  do not imitate their sentence structure, jargon or density of detail.
+- Use short, descriptive section headings. Explain the main point of each
+  section before expanding on it.
+- Include alternate names, etymology or IPA only when they materially help
+  understanding. Do not invent an etymology or add a parenthesis merely to
+  resemble Wikipedia; move secondary naming details out of the opening.
+
+FORMATTING:
+
 Do not use HTML except for tables that need merged cells, as described below.
 Do not use SVG, scripts or YAML frontmatter.
 For mathematical notation, use TeX inside $...$ for inline expressions or
@@ -289,7 +312,6 @@ $$ on separate lines for display equations. Keep TeX commands and subscripts
 unescaped within these delimiters; do not wrap math in backticks.
 Use math only when it makes sense to do so. Always prefer english notation.
 End the article with a "See also" section
-Don't ever metion that this is fictional - this is written as if it is a real encyclopedia article.
 Never draw diagrams using text characters: no ASCII art, Unicode box-drawing,
 arrow flowcharts, character-based charts, or preformatted text diagrams.
 This applies both inside and outside code fences, even if reference articles
@@ -350,43 +372,43 @@ Return the finished encyclopedia article without discussing the stub or brief.`
 
 INTERNAL LINKS:
 
-Use [[Article name]] or [[Article name|display text]] to connect distinct
-subjects that readers could explore in their own articles, whether real-world
-or newly introduced lore. Missing articles are valid link targets.
+Use [[Article name]] or [[Article name|display text]] selectively to connect
+the subjects most useful for understanding this article or exploring its
+world further. Missing articles are valid link targets, but a subject being
+named is not sufficient reason to link it.
 
-- Link relevant named places and regions, including familiar real-world ones
-  such as [[North America]], [[East Asia]] and [[United States]].
-- Link named events, conflicts, eras, organisations, institutions, movements,
-  people, deities, projects and other distinct lore subjects.
+- Use at most 40 internal link occurrences in the entire article, including
+  "See also", headings, lists, tables, captions and "Main article" pointers,
+  whether written as wiki links, Markdown links or HTML links. This applies
+  to both ordinary articles and world overviews. It is a ceiling, not a
+  target; shorter or narrower articles should use fewer links.
+- There is no fixed per-paragraph link quota. Keep the prose easy to read
+  by avoiding clusters of incidental links, especially in the opening.
+- Prioritize central people, institutions, places and events. Leave incidental
+  names and familiar geographic labels unlinked unless they play a substantial
+  role in this article. Do not invent extra lore just to create link targets.
 - Do not link generic descriptive phrases or incidental technical concepts
   merely because they could have encyclopedia definitions. For example, leave
   "intelligence explosion" unlinked when it describes a process rather than
   names a distinct event. Prefer the event's actual name as the link target.
-- Formatting must not suppress a useful link. Link named subjects in section
-  headings, bold list labels and italic text, even when they appear nowhere
-  else. This explicitly overrides Wikipedia conventions against heading links.
+- A useful link may appear in a heading, bold label or italic text, but it
+  must meet the same relevance criteria.
   Keep the article's own H1 title unlinked.
 - Keep emphasis markers, surrounding quotation marks, incidental dates,
   trailing punctuation and whitespace outside the link target. Use the
   catalogue's exact title when one exists; use display text for aliases.
-- Link the first useful occurrence of a subject; repeat only where it helps
-  navigation in a later section. Do not link the article to itself. The
-  3–6 link limit applies only to "See also", not to the article body.
-- Use "Main article: <Link>" in a section heading or at the end of a section to point to a more detailed article on a subject only if it makes sense to.
+- Link only the first useful occurrence of each chosen subject outside
+  "See also"; leave later mentions unlinked, including aliases of the same
+  subject. Do not link the article to itself. Keep "See also" to 3–6 links;
+  those may repeat important body targets but count toward the 40-link total.
+- Use "Main article: <Link>" only when a section needs a pointer to a more
+  detailed article.
 
-Before returning the article, review the prose, section headings, bold labels
-and italic names for missed article subjects, and remove links that merely
-decorate generic terminology. Apply this review silently.
-
-Where appropriate, define the article's name in wikipedia style:
-
-i.e. Atlantis (Ancient Greek: Ἀτλαντὶς νῆσος, romanized: Atlantìs nêsos, lit. 'island of Atlas')
-
-or sometimes use IPA pronunciation notation
-
-Don't use IPA in every article, only when it is hard to pronounce, e.g. Atlantis is easy to pronounce, but "Xenotime" might need IPA.
-
-Try to put something in brackets though.
+Before returning the article, silently edit it for clarity and selective
+linking. Simplify cumbersome sentences, explain unfamiliar lore, remove
+unnecessary asides, and cut links that interrupt reading without adding
+useful navigation. Remove repeated body targets and check that the entire
+article contains no more than 40 internal link occurrences.
 
 Don't use ASCII or Unicode diagrams, even if the reference articles contain them.
 
@@ -413,8 +435,9 @@ REFERRING ARTICLES:
 These are up to ten complete articles linking to the requested article.
 The source article whose link was followed appears first. Use these articles
 and the main page, when supplied, to preserve established facts and continuity.
-The length and image requirements in these instructions take precedence over
-any different numeric targets in the reference text.
+The writing style, linking guidance, length and image requirements in these
+instructions take precedence over the style and any different numeric
+targets in the reference text.
 
 ${referringText}
 
